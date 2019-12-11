@@ -3548,81 +3548,79 @@ sat_nin([_T nin A|R1],R2,c,F) :-             % t nin a, a not a set neither an i
 	sat_step(R1,R2,_,F).
 
 sat_nin_int([R nin I|R1],R2,c,F) :-         % bounded/unbounded interval: t nin int(A,B)
-%        int_term(I),                         %   (case i)
-        simple_integer_expr(R),
-        I=int(S,_T),
-        solve_int(R + 1 =< S,IntC),
-        append(IntC,R1,R3),
-        sat_integer([integer(R),integer(S)|R3], R2, _, F).
+%	int_term(I),                         %   (case i)
+	simple_integer_expr(R),
+	I=int(S,_T),
+	solve_int(R + 1 =< S,IntC),
+	append(IntC,R1,R3),
+	sat_integer([integer(R),integer(S)|R3], R2, _, F).
 sat_nin_int([R nin I|R1],R2,c,F) :-         %   (case ii)
-%        int_term(I),
-        simple_integer_expr(R),
-        I=int(_S,T),
-        solve_int(T + 1 =< R,IntC),
-        append(IntC,R1,R3),
-        sat_integer([integer(R),integer(T)|R3], R2, _, F).
+%	int_term(I),
+	simple_integer_expr(R),
+	I=int(_S,T),
+	solve_int(T + 1 =< R,IntC),
+	append(IntC,R1,R3),
+	sat_integer([integer(R),integer(T)|R3], R2, _, F).
 sat_nin_int([R nin _I|R1], R2, c, F) :-      %   (case iii)
-%        int_term(I),!,
-        sat_ninteger([ninteger(R)|R1], R2, _, F).
+%	int_term(I),!,
+	sat_ninteger([ninteger(R)|R1], R2, _, F).
 
 sat_nin_ris([X nin I|R1],[X nin I|R2],Stop,F) :- % ris: X nin ris{v,D,...) (var-ris D): irreducible
-        ris_term(I,ris(_ in Dom,_,_,_,_)),
-        var_ris(Dom),!,
-        sat_step(R1,R2,Stop,F).
+	ris_term(I,ris(_ in Dom,_,_,_,_)),
+	var_ris(Dom),!,
+	sat_step(R1,R2,Stop,F).
 sat_nin_ris([_X nin I|R1],R2,c,F) :-         % ris: X nin ris{v,{},...) -> true
-        ris_term(I,ris(_ in Dom,_,_,_,_)),
-        is_empty(Dom),!,
-        sat_step(R1,R2,_,F).
+	ris_term(I,ris(_ in Dom,_,_,_,_)),
+	is_empty(Dom),!,
+	sat_step(R1,R2,_,F).
 
 sat_nin_ris([X nin T1|R1],[X nin T1|R2],Stop,nf) :-
-         ris_term(T1,ris(CE_Dom,_,_,_,_)),
-         CE_Dom = (_ in Dom), nonvar_ris(Dom),
-         open_intv(Dom),!,
-         sat_step(R1,R2,Stop,nf).
+	ris_term(T1,ris(CE_Dom,_,_,_,_)),
+	CE_Dom = (_ in Dom), nonvar_ris(Dom),
+	open_intv(Dom),!,
+	sat_step(R1,R2,Stop,nf).
 sat_nin_ris([X nin I|R1],R2,c,F) :-          % ris: X nin ris{v,{...},...)
-        ris_term(I,ris(CE_Dom,V,Fl,P,PP)),
-        nonvar(CE_Dom), CE_Dom = (CtrlExpr in Dom),
-        nonopen_intv(Dom),
-        CtrlExpr == P,!,
-        (sat_step([X nin Dom |R1],R2,_,F)
-         ;
-         ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),
-         CtrlExprNew=X,
-         chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,_PNew,PPNew,_]),
-         find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
-         get_preconditions(PPNew,PosPre,NegPre),
-         negate(FlNew,NegFl),
-         conj_append(PosPre,PPNew,PrePPNew),
-         conj_append(PrePPNew,NegFl,PreNegFl),
-         mk_atomic_constraint((PreNegFl or NegPre),NegFlD),
-         sat_step([NegFlD |R1],R2,_,F)
-        ).
+	ris_term(I,ris(CE_Dom,V,Fl,P,PP)),
+	nonvar(CE_Dom), CE_Dom = (CtrlExpr in Dom),
+	nonopen_intv(Dom),
+	CtrlExpr == P,
+	!,
+	(	sat_step([X nin Dom |R1],R2,_,F)
+	;	ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),
+		CtrlExprNew=X,
+		chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,_PNew,PPNew,_]),
+		find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
+		get_preconditions(PPNew,PosPre,NegPre),
+		negate(FlNew,NegFl),
+		conj_append(PosPre,PPNew,PrePPNew),
+		conj_append(PrePPNew,NegFl,PreNegFl),
+		mk_atomic_constraint((PreNegFl or NegPre),NegFlD),
+		sat_step([NegFlD |R1],R2,_,F)
+	).
 sat_nin_ris([X nin I|R1],R2,c,F) :-          % ris: X nin ris{v,{...},...)
-        ris_term(I,ris(CE_Dom,V,Fl,P,PP)),
-        nonvar(CE_Dom), CE_Dom = (CtrlExpr in Dom), nonvar_ris(Dom),!,
-        nonopen_intv(Dom),
-        ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),
-        get_rest(Dom,CtrlExprNew,D,CNS),
-       (nonvar(CNS),!,
-        append(CNS,R1,R3),
-        chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]),
-        find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
-        solve_expression(Z,PNew),
-        get_preconditions(PPNew,PosPre,NegPre),
-        mk_atomic_constraint(PPNew,PPNewD),
-        (conj_append(PosPre,FlNew,PreFlNew),
-         mk_atomic_constraint(PreFlNew,FlNewD),
-         sat_step([FlNewD,PPNewD,X neq Z,X nin ris(CtrlExpr in D,V,Fl,P,PP) |R3],R2,_,F)
-         ;
-         negate(FlNew,NegFl),
-         conj_append(PosPre,PPNew,PrePPNew),
-         conj_append(PrePPNew,NegFl,PreNegFl),
-         mk_atomic_constraint((PreNegFl or NegPre),NegFlD),
-         sat_step([NegFlD,X nin ris(CtrlExpr in D,V,Fl,P,PP) |R3],R2,_,F)
-        )
-       ;
-        sat_nin([X nin ris(CtrlExpr in D,V,Fl,P,PP) |R1],R2,_,F)
-       ).
+	ris_term(I,ris(CE_Dom,V,Fl,P,PP)),
+	nonvar(CE_Dom), CE_Dom = (CtrlExpr in Dom), nonvar_ris(Dom),!,
+	nonopen_intv(Dom),
+	ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),
+	get_rest(Dom,CtrlExprNew,D,CNS),
+	(	nonvar(CNS) ->
+		append(CNS,R1,R3),
+		chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]),
+		find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
+		solve_expression(Z,PNew),
+		get_preconditions(PPNew,PosPre,NegPre),
+		mk_atomic_constraint(PPNew,PPNewD),
+		(	conj_append(PosPre,FlNew,PreFlNew),
+			mk_atomic_constraint(PreFlNew,FlNewD),
+			sat_step([FlNewD,PPNewD,X neq Z,X nin ris(CtrlExpr in D,V,Fl,P,PP) |R3],R2,_,F)
+		;	negate(FlNew,NegFl),
+			conj_append(PosPre,PPNew,PrePPNew),
+			conj_append(PrePPNew,NegFl,PreNegFl),
+			mk_atomic_constraint((PreNegFl or NegPre),NegFlD),
+			sat_step([NegFlD,X nin ris(CtrlExpr in D,V,Fl,P,PP) |R3],R2,_,F)
+		)
+	;	sat_nin([X nin ris(CtrlExpr in D,V,Fl,P,PP) |R1],R2,_,F)
+	).
 
 sat_nin_cp([T nin I|R1],R2,c,F) :-           % cp: [X,Y] nin cp(...)
 	nonvar(I), I = cp(A,B), T=[X,Y],
@@ -3667,23 +3665,22 @@ sat_sub([subset(S1,S2)|R1],[subset(S1,S2)|R2],Stop,F) :- % subset(s,int(A,B)) (o
 	sat_step(R1,R2,Stop,F).
 
 sat_sub([subset(S1,I2)|R1],R2,c,F) :-                 % subset(X,int(a,b)), var X
-         subset_elim,
-         var(S1), closed_intv(I2,_,_),!,
-         (S1 = {},
-          sat_step(R1,R2,_,F)
-         ;
-          S1 = _R with X,
-          sat_step([X in I2,subset(S1,setlog_term(I2))|R1],R2,_,F)
-         ).
+	subset_elim,
+	var(S1), closed_intv(I2,_,_),
+	!,
+	(	S1 = {},
+		sat_step(R1,R2,_,F)
+	;	S1 = _R with X,
+		sat_step([X in I2,subset(S1,setlog_term(I2))|R1],R2,_,F)
+	).
 sat_sub([subset(S,I)|R1],R2,c,F) :-                   % subset({...},setlog_term(int(L,H)))
-         nonvar(I), I = setlog_term(I2),!,           % for internal use only
-         S = S1 with Z,
-         (S1 = {},
-          sat_step([Z in I2|R1],R2,_,F)
-         ;
-          S1 = _R with X,
-          sat_step([Z in I2,X in I2,X > Z,subset(S1,I)|R1],R2,_,F)
-         ).
+	nonvar(I), I = setlog_term(I2),!,           % for internal use only
+	S = S1 with Z,
+	(	S1 = {},
+		sat_step([Z in I2|R1],R2,_,F)
+	;	S1 = _R with X,
+		sat_step([Z in I2,X in I2,X > Z,subset(S1,I)|R1],R2,_,F)
+	).
 sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % subset(X,S2), var X - subset_elim
 	subset_elim,
 	var_ris_st(S1),!,
@@ -4079,53 +4076,55 @@ sat_un([un(S,T,X)|R1],R2,R,F) :-                      % un(s1,s2,X) (X variable-
 %%% un(s1,s2,X) (X var)
 
 sat_un_v([un(S,T,X)|R1],R2,R,F) :-                    % un({...},s2,X) (bounded set)
-         bounded(S),
-         occur_check(X,S), occur_check(X,T),!,
-         %write('---unSet - un(s1,s2,X), s1 bounded set'),nl,
-         sat_un_s([un(S,T,X)|R1],R2,R,F).
+	bounded(S),
+	occur_check(X,S), occur_check(X,T),!,
+	%write('---unSet - un(s1,s2,X), s1 bounded set'),nl,
+	sat_un_s([un(S,T,X)|R1],R2,R,F).
 sat_un_v([un(S,T,X)|R1],R2,R,F) :-                    % un(s1,{...},X) (bounded set)
-         bounded(T),
-         occur_check(X,T), occur_check(X,S),!,
-         %write('---unSet - un(s1,s2,X), s2 bounded set'),nl,
-         sat_un_t([un(S,T,X)|R1],R2,R,F).
+	bounded(T),
+	occur_check(X,T), occur_check(X,S),!,
+	%write('---unSet - un(s1,s2,X), s2 bounded set'),nl,
+	sat_un_t([un(S,T,X)|R1],R2,R,F).
 sat_un_v([un(S,T,X)|R1],R2,c,F) :-                    % un({...|X},t,X) (special case)
-         nonvar(S),
-         tail(S,TS),samevar(TS,X),  %%%!,
-         %write('---unSet special - un({...|X},t,X)'),nl,
-         replace_tail(S,N,NewS),!,
-         (samevar(TS,T),!,
-          sat_eq([X=NewS,set(N)|R1],R2,_,F)        % un({...|X},X,X)
-          ;
-          sat_eq([X=NewS,un(T,N,N),set(N)|R1],R2,_,F)).
+	nonvar(S),
+	tail(S,TS),samevar(TS,X),  %%%!,
+	%write('---unSet special - un({...|X},t,X)'),nl,
+	replace_tail(S,N,NewS),
+	!,
+	(	samevar(TS,T) ->
+		sat_eq([X=NewS,set(N)|R1],R2,_,F)        % un({...|X},X,X)
+	;	sat_eq([X=NewS,un(T,N,N),set(N)|R1],R2,_,F)
+	).
 sat_un_v([un(S,T,X)|R1],R2,c,F) :-                    % un(s,{...|X},X) (special case)
-         nonvar(T),
-         tail(T,TT),samevar(TT,X),
-         %write('---unSet special - un(s,{...|X},X)'),nl,
-         replace_tail(T,N,NewT),!,
-         (samevar(TT,S),!,
-          sat_eq([X=NewT,set(N)|R1],R2,_,F)        % un(X,{...|X},X)
-          ;
-          sat_eq([X=NewT,un(S,N,N),set(N)|R1],R2,_,F)).
+	nonvar(T),
+	tail(T,TT),samevar(TT,X),
+	%write('---unSet special - un(s,{...|X},X)'),nl,
+	replace_tail(T,N,NewT),
+	!,
+	(	samevar(TT,S) ->
+		sat_eq([X=NewT,set(N)|R1],R2,_,F)        % un(X,{...|X},X)
+	;	sat_eq([X=NewT,un(S,N,N),set(N)|R1],R2,_,F)
+	).
 sat_un_v([un(S,T,X)|R1],[un(S,T,X)|R2],Stop,nf) :- !, % delayed until final_sat is called
-         sat_step(R1,R2,Stop,nf).                    % (--> Level 3)
+	sat_step(R1,R2,Stop,nf).                    % (--> Level 3)
 sat_un_v([un(S,T,X)|R1],R2,c,f) :-                    % un({.../R},s,X)  [rule U_5]
-         nonvar(S), S = N1 with T1,!,
-         %write('---unSet - un({.../R},s,X)'),nl,
-         occur_check(X,S), novar_occur_check(X,T),
-         X = N with T1,
-         sat_un([un(N1,T,N),set(N),set(N1)|R1],R2,_,f).
+	nonvar(S), S = N1 with T1,!,
+	%write('---unSet - un({.../R},s,X)'),nl,
+	occur_check(X,S), novar_occur_check(X,T),
+	X = N with T1,
+	sat_un([un(N1,T,N),set(N),set(N1)|R1],R2,_,f).
 sat_un_v([un(T,S,X)|R1],R2,c,f) :-                    % un(t,{.../S},X) --> un({.../S},t,X) [rule U_6]
-         nonvar(S),
-         S=_T2 with _T1,!,
-         %write('---unSet - un(t,{.../S},X)'),nl,
-         sat_un([un(S,T,X)|R1],R2,_,f).
+	nonvar(S),
+	S=_T2 with _T1,!,
+	%write('---unSet - un(t,{.../S},X)'),nl,
+	sat_un([un(S,T,X)|R1],R2,_,f).
 
 sat_un_s([un(S,T,X)|R1],R2,c,F) :-                    % un({...},s2,X) (bounded set case)
-         g_union(S,T,X),
-         sat_step(R1,R2,_,F).
+	g_union(S,T,X),
+	sat_step(R1,R2,_,F).
 sat_un_t([un(S,T,X)|R1],R2,c,F) :-                    % un(s1,{...},X) (bounded set case)
-         g_union(T,S,X),
-         sat_step(R1,R2,_,F).
+	g_union(T,S,X),
+	sat_step(R1,R2,_,F).
 
 %%% un(s1,s2,X) (X variable-cp)
 
@@ -4164,290 +4163,287 @@ sat_un_vcp([un(S,T,X)|R1],R2,c,F) :-                  % un({.../S},T,cp(A,B)), a
            sat_un([un(N1,T,N),set(N),set(N1)|R3],R2,_,F)
          ).
 sat_un_vcp([un(T,S,X)|R1],R2,c,F) :-                  % un(T,{.../S},cp(A,B)) --> un({.../S},T,cp(A,B))
-         nonvar(S), S=_T2 with _T1,!,
-         %write('---unCP - un(T,{.../S},cp(A,B)), and A or B are vars'),nl,
-         sat_un([un(S,T,X)|R1],R2,_,F).
+	nonvar(S), S=_T2 with _T1,!,
+	%write('---unCP - un(T,{.../S},cp(A,B)), and A or B are vars'),nl,
+	sat_un([un(S,T,X)|R1],R2,_,F).
 
 %%% un(s1,s2,X) (X variable-ris)
 
 sat_un_vris([un(S,T,X)|R1],R2,c,F) :-                    % un({.../R},s,X)  [rule-ris U_5]
-         nonvar(S), S = _ with T1,!,
-         %write(''),nl,
-         sunify(S,N1 with T1,C1), append(C1,R1,C1R1),
-         sunify(X,N with T1,C2), append(C2,C1R1,R3),
-         (sat_nin([T1 nin T, T1 nin N1, T1 nin N, un(N1,T,N), set(N), set(N1)|R3],R2,_,F)
-         ;
-          sunify(T,N2 with T1,C3), append(C3,R3,R4),
-          sat_nin([T1 nin N2, T1 nin N1, T1 nin N, un(N1,N2,N), set(N), set(N1), set(N2)|R4],R2,_,F)).
+	nonvar(S), S = _ with T1,!,
+	%write(''),nl,
+	sunify(S,N1 with T1,C1), append(C1,R1,C1R1),
+	sunify(X,N with T1,C2), append(C2,C1R1,R3),
+	(	sat_nin([T1 nin T, T1 nin N1, T1 nin N, un(N1,T,N), set(N), set(N1)|R3],R2,_,F)
+	;	sunify(T,N2 with T1,C3), append(C3,R3,R4),
+		sat_nin([T1 nin N2, T1 nin N1, T1 nin N, un(N1,N2,N), set(N), set(N1), set(N2)|R4],R2,_,F)
+	).
 
 sat_un_vris([un(T,S,X)|R1],R2,c,F) :-                    % un(t,{.../S},X) --> un({.../S},t,X)  [rule-ris U_6]
-         nonvar(S), S = _T2 with _T1,!,
-         %write(''),nl,
-         sat_un([un(S,T,X)|R1],R2,_,F).
+	nonvar(S), S = _T2 with _T1,!,
+	%write(''),nl,
+	sat_un([un(S,T,X)|R1],R2,_,F).
 
 %%% un(r,s,t) and either r or s or t are not-empty intervals
 
 sat_un_int([un(I1,I2,S)|R1],R2,c,F) :-               % un(int(...),int(...),s)
-         %nonvar(I1), nonvar(I2),
-         closed_intv(I1,A1,B1), closed_intv(I2,A2,B2),
-         B1 >= A2,!,
-         A3 is min(A1,A2),
-         B3 is max(B1,B2),
-         sunify(int(A3,B3),S,C),
-         append(C,R1,R3),
-         sat_step(R3,R2,_,F).
+	%nonvar(I1), nonvar(I2),
+	closed_intv(I1,A1,B1), closed_intv(I2,A2,B2),
+	B1 >= A2,!,
+	A3 is min(A1,A2),
+	B3 is max(B1,B2),
+	sunify(int(A3,B3),S,C),
+	append(C,R1,R3),
+	sat_step(R3,R2,_,F).
 sat_un_int([un(I1,I2,S)|R1],R2,c,F) :-               % un(int(...),int(...),s)
-         %nonvar(I1), nonvar(I2),
-         closed_intv(I1,_A1,B1), closed_intv(I2,A2,_B2),
-         B1 < A2,!,
-         int_to_set(I2,S2),
-         int_to_set(I1,S1,S2),
-         sunify(S1,S,C),
-         append(C,R1,R3),
-         sat_step(R3,R2,_,F).
+	%nonvar(I1), nonvar(I2),
+	closed_intv(I1,_A1,B1), closed_intv(I2,A2,_B2),
+	B1 < A2,!,
+	int_to_set(I2,S2),
+	int_to_set(I1,S1,S2),
+	sunify(S1,S,C),
+	append(C,R1,R3),
+	sat_step(R3,R2,_,F).
 sat_un_int([un(S1,S2,I)|R1],R2,c,F) :-               % un(s1,s2,int(L,L))
-         closed_intv(I,T1,T2), T1==T2, !,
-         sat_un([un(S1,S2,{} with T1)|R1],R2,_,F).
+	closed_intv(I,T1,T2), T1==T2, !,
+	sat_un([un(S1,S2,{} with T1)|R1],R2,_,F).
 sat_un_int([un(S1,S2,I)|R1], R2, c, F) :-            % un(s1,s2,int(...))
-         closed_intv(I,T1,T2),
-         sunify(N1 with T1,S1,C1), append(C1,R1,C2),
-         T3 is T1 + 1,
-         sat_nin([T1 nin N1,set(N1),un(N1,S2,int(T3,T2)) | C2],R2,_,F).
+	closed_intv(I,T1,T2),
+	sunify(N1 with T1,S1,C1), append(C1,R1,C2),
+	T3 is T1 + 1,
+	sat_nin([T1 nin N1,set(N1),un(N1,S2,int(T3,T2)) | C2],R2,_,F).
 sat_un_int([un(S1,S2,I)|R1],R2,c,F) :-               % un(s1,s2,int(...))
-         closed_intv(I,T1,T2),
-         sunify(N1 with T1,S2,C1), append(C1,R1,C2),
-         T3 is T1 + 1,
-         sat_nin([T1 nin N1,set(N1),un(S1,N1,int(T3,T2)) | C2],R2,_,F).
+	closed_intv(I,T1,T2),
+	sunify(N1 with T1,S2,C1), append(C1,R1,C2),
+	T3 is T1 + 1,
+	sat_nin([T1 nin N1,set(N1),un(S1,N1,int(T3,T2)) | C2],R2,_,F).
 sat_un_int([un(S1,S2,I)|R1],R2,c,F) :-               % un(s1,s2,int(...))
-         closed_intv(I,T1,T2), !,
-         sunify(N1 with T1,S1,C1),
-         sunify(N2 with T1,S2,C2),
-         append(C1,R1,C3), append(C2,C3,C4),
-         T3 is T1 + 1,
-         sat_nin([T1 nin N1,T1 nin N2,set(N1),set(N2),un(N1,N2,int(T3,T2)) | C4],R2,_,F).
+	closed_intv(I,T1,T2), !,
+	sunify(N1 with T1,S1,C1),
+	sunify(N2 with T1,S2,C2),
+	append(C1,R1,C3), append(C2,C3,C4),
+	T3 is T1 + 1,
+	sat_nin([T1 nin N1,T1 nin N2,set(N1),set(N2),un(N1,N2,int(T3,T2)) | C4],R2,_,F).
 sat_un_int([un(I,S,X)|R1],R2,c,F) :-                 % un(int(L,L),s,X)
-         var(X),
-         closed_intv(I,T1,T2), T1==T2, !,
-         sat_un([un({} with T1,S,X)|R1],R2,_,F).
+	var(X),
+	closed_intv(I,T1,T2), T1==T2, !,
+	sat_un([un({} with T1,S,X)|R1],R2,_,F).
 sat_un_int([un(I,S,X)|R1],R2,c,F) :-                 % un(int(...),s,X) (i)
-         var(X),
-         closed_intv(I,T1,T2),
-         T3 is T1 + 1,
-         sunify(N with T1, X, C1),
-         append(C1, R1, C2),
-         sat_nin([T1 nin N,T1 nin S,set(N),un(int(T3,T2),S,N) | C2], R2, _, F).
+	var(X),
+	closed_intv(I,T1,T2),
+	T3 is T1 + 1,
+	sunify(N with T1, X, C1),
+	append(C1, R1, C2),
+	sat_nin([T1 nin N,T1 nin S,set(N),un(int(T3,T2),S,N) | C2], R2, _, F).
 sat_un_int([un(I,S,X)|R1],R2,c,F) :-                  % un(int(...),s,X) (ii)
-         var(X),
-         closed_intv(I,T1,T2),!,
-         T3 is T1 + 1,
-         sunify(N with T1, X, C1),
-         sunify(N1 with T1, S, C2),
-         append(C1, R1, C3),
-         append(C2, C3, C4),
-         sat_nin([T1 nin N,T1 nin N1,set(N),set(N1),un(int(T3,T2),N1,N) | C4], R2, _, F).
+	var(X),
+	closed_intv(I,T1,T2),!,
+	T3 is T1 + 1,
+	sunify(N with T1, X, C1),
+	sunify(N1 with T1, S, C2),
+	append(C1, R1, C3),
+	append(C2, C3, C4),
+	sat_nin([T1 nin N,T1 nin N1,set(N),set(N1),un(int(T3,T2),N1,N) | C4], R2, _, F).
 sat_un_int([un(S,I,X)|R1],R2,c,F) :-                   % un(s,int(...),X)
-         var(X),
-         closed_intv(I,_T1,_T2),!,
-         sat_un([un(I,S,X)|R1],R2,_,F).
+	var(X),
+	closed_intv(I,_T1,_T2),!,
+	sat_un([un(I,S,X)|R1],R2,_,F).
 
 %%% un(r,s,t) and either r or s or t are non-var RIS
 
 sat_un_ris([un(X,Y,Z)|R1],R2,c,F) :-
-         ris_to_set_t(X,N1,Xt),
-         ris_to_set_t(Y,N2,Yt),
-         ris_to_set_t(Z,N3,Zt),
-         ris_to_set_k(X,N1,Xk),
-         ris_to_set_k(Y,N2,Yk),
-         ris_to_set_k(Z,N3,Zk),
-         %append([un(Xt,Yt,Zt)],Xk,UnXk),
-         append([delay(un(Xt,Yt,Zt),false)],Xk,UnXk),
-         append(UnXk,Yk,XYk), append(XYk,Zk,XYZk),
-         append(XYZk,R1,R3),
-         sat_step(R3,R2,_,F).
+	ris_to_set_t(X,N1,Xt),
+	ris_to_set_t(Y,N2,Yt),
+	ris_to_set_t(Z,N3,Zt),
+	ris_to_set_k(X,N1,Xk),
+	ris_to_set_k(Y,N2,Yk),
+	ris_to_set_k(Z,N3,Zk),
+	%append([un(Xt,Yt,Zt)],Xk,UnXk),
+	append([delay(un(Xt,Yt,Zt),false)],Xk,UnXk),
+	append(UnXk,Yk,XYk), append(XYk,Zk,XYZk),
+	append(XYZk,R1,R3),
+	sat_step(R3,R2,_,F).
 
 ris_to_set_t(X,_N,X) :-
-         var_ris(X),!.
+	var_ris(X),!.
 ris_to_set_t(X,_N,{}) :-
-         is_empty(X),!.
+	is_empty(X),!.
 ris_to_set_t(X,N,N) :-
-         ris_term(X),!.
+	ris_term(X),!.
 ris_to_set_t(X,_N,X).
 
 ris_to_set_k(X,_N,[A=A]) :-
-         var_ris(X),!.
+	var_ris(X),!.
 ris_to_set_k(X,_N,[A=A]) :-
-         is_empty(X),!.
+	is_empty(X),!.
 ris_to_set_k(X,N,K) :-
-         ris_term(X,ris(CE_Dom,V,Fl,P,PP)),!,
-         nonvar(CE_Dom), CE_Dom = (CtrlExpr in Dom),
-         nonopen_intv(Dom),
-         ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),                                 %LV = vars(CtrlExpr) + vars(V)
-         get_rest(Dom,CtrlExprNew,D,CNS),                                      %unifies the ctrl-term with the 1st elem. d of the domain
-        (nonvar(CNS),!,
-         chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]), %rename all "local" variables in the RIS
-         find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),                    %including those in CtrlExpr
-
-         solve_expression(Z,PNew),               %Z is P(d)
-         get_preconditions(PPNew,PosPre,NegPre),
-         conj_append(PosPre,FlNew,PreFlNew),
-         mk_atomic_constraint(PreFlNew,FlNewD),     %FlNewD is F(d) (dealt with as a constraint)
-         mk_atomic_constraint(PPNew,PPNewD),
-
-         (K = [FlNewD, PPNewD, N = ris(CtrlExpr in D,V,Fl,P,PP) with Z | CNS]
-         ;
-         negate(FlNew,NegFl),
-         conj_append(PosPre,PPNew,PrePPNew),
-         conj_append(PrePPNew,NegFl,PreNegFl),
-         mk_atomic_constraint((PreNegFl or NegPre),NegFlD), %NegFlD is not F(d) (dealt with as a constraint)
-         K = [NegFlD, N = ris(CtrlExpr in D,V,Fl,P,PP) | CNS]
-         )
-       ;
-         K = [N = ris(CtrlExpr in D,V,Fl,P,PP)]
-       ).
+	ris_term(X,ris(CE_Dom,V,Fl,P,PP)),!,
+	nonvar(CE_Dom), CE_Dom = (CtrlExpr in Dom),
+	nonopen_intv(Dom),
+	ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),                                 %LV = vars(CtrlExpr) + vars(V)
+	get_rest(Dom,CtrlExprNew,D,CNS),                                      %unifies the ctrl-term with the 1st elem. d of the domain
+	(	nonvar(CNS) ->
+		chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]), %rename all "local" variables in the RIS
+		find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),                    %including those in CtrlExpr
+		
+		solve_expression(Z,PNew),               %Z is P(d)
+		get_preconditions(PPNew,PosPre,NegPre),
+		conj_append(PosPre,FlNew,PreFlNew),
+		mk_atomic_constraint(PreFlNew,FlNewD),     %FlNewD is F(d) (dealt with as a constraint)
+		mk_atomic_constraint(PPNew,PPNewD),
+		
+		(	K = [FlNewD, PPNewD, N = ris(CtrlExpr in D,V,Fl,P,PP) with Z | CNS]
+		;	negate(FlNew,NegFl),
+			conj_append(PosPre,PPNew,PrePPNew),
+			conj_append(PrePPNew,NegFl,PreNegFl),
+			mk_atomic_constraint((PreNegFl or NegPre),NegFlD), %NegFlD is not F(d) (dealt with as a constraint)
+			K = [NegFlD, N = ris(CtrlExpr in D,V,Fl,P,PP) | CNS]
+		)
+	;	K = [N = ris(CtrlExpr in D,V,Fl,P,PP)]
+	).
 ris_to_set_k(_X,_N,[A=A]).
 
 
 %%% un(r,s,t) and either r or s or t are non-var CP
 
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(X,Y,Z) (not_cp(X), not_cp(Y), not_cp(Z))
-         not_cp(X), not_cp(Y), not_cp(Z),!,
-         %write(ncp_ncp_ncp),nl,
-         sat_un([un(X,Y,Z)|R1],R2,_,F).
+	not_cp(X), not_cp(Y), not_cp(Z),!,
+	%write(ncp_ncp_ncp),nl,
+	sat_un([un(X,Y,Z)|R1],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(X,cp(A,B),Z) (not_cp(X)) --> un(cp(A,B),X,Z)
-         nonvar(Y), Y = cp(_,_),
-         not_cp(X),!,
-         %write('ncp_cp_?'),nl,
-         sat_un_cp([un(Y,X,Z)|R1],R2,_,F).
+	nonvar(Y), Y = cp(_,_),
+	not_cp(X),!,
+	%write('ncp_cp_?'),nl,
+	sat_un_cp([un(Y,X,Z)|R1],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),Y,Z) (not_cp(Y), not_cp(Z))
-         nonvar(X), X = cp(_,_),
-         not_cp(Y), not_cp(Z),!,
-         %write(cp_ncp_ncp),nl,
-         cp_to_set(1,X,Xt,Xu),
-         append(Xu,R1,R3),
-         %sat_un([un(Xt,Y,Z),set(Xt)|R3],R2,_,F).
-         sat_step([delay(un(Xt,Y,Z),false),set(Xt)|R3],R2,_,F).
+	nonvar(X), X = cp(_,_),
+	not_cp(Y), not_cp(Z),!,
+	%write(cp_ncp_ncp),nl,
+	cp_to_set(1,X,Xt,Xu),
+	append(Xu,R1,R3),
+	%sat_un([un(Xt,Y,Z),set(Xt)|R3],R2,_,F).
+	sat_step([delay(un(Xt,Y,Z),false),set(Xt)|R3],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),cp(C,D),Z) (not_cp(Z))
-         nonvar(X), X = cp(_,_),
-         nonvar(Y), Y = cp(_,_),
-         not_cp(Z),!,
-         %write(cp_cp_ncp),nl,
-         cp_to_set(1,X,Xt,Xu), cp_to_set(2,Y,Yt,Yu),
-         append(Xu,Yu,XYu), append(XYu,R1,R3),
-         sat_step([un(Xt,Yt,Z),set(Xt),set(Yt)|R3],R2,_,F).
+	nonvar(X), X = cp(_,_),
+	nonvar(Y), Y = cp(_,_),
+	not_cp(Z),!,
+	%write(cp_cp_ncp),nl,
+	cp_to_set(1,X,Xt,Xu), cp_to_set(2,Y,Yt,Yu),
+	append(Xu,Yu,XYu), append(XYu,R1,R3),
+	sat_step([un(Xt,Yt,Z),set(Xt),set(Yt)|R3],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(X,Y,cp(C,D)) (not_cp(X), not_cp(Y))
-         not_cp(X), not_cp(Y),
-         nonvar(Z), Z = cp(_,_),!,
-         %write(ncp_ncp_cp),nl,
-         cp_to_set(3,Z,Zt,Zu),
-         append(Zu,R1,R3),
-         sat_un([un(X,Y,Zt),set(Zt)|R3],R2,_,F).
+	not_cp(X), not_cp(Y),
+	nonvar(Z), Z = cp(_,_),!,
+	%write(ncp_ncp_cp),nl,
+	cp_to_set(3,Z,Zt,Zu),
+	append(Zu,R1,R3),
+	sat_un([un(X,Y,Zt),set(Zt)|R3],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),Y,cp(C,D)) (not_cp(Y))
-         nonvar(X), X = cp(_,_),
-         not_cp(Y),
-         nonvar(Z), Z = cp(_,_),!,
-         %write(cp_ncp_cp),nl,
-         cp_to_set(1,X,Xt,Xu),
-         cp_to_set(3,Z,Zt,Zu),
-         append(Xu,Zu,XZu), append(XZu,R1,R3),
-         sat_un([un(Xt,Y,Zt),set(Xt),set(Zt)|R3],R2,_,F).
+	nonvar(X), X = cp(_,_),
+	not_cp(Y),
+	nonvar(Z), Z = cp(_,_),!,
+	%write(cp_ncp_cp),nl,
+	cp_to_set(1,X,Xt,Xu),
+	cp_to_set(3,Z,Zt,Zu),
+	append(Xu,Zu,XZu), append(XZu,R1,R3),
+	sat_un([un(Xt,Y,Zt),set(Xt),set(Zt)|R3],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),cp(C,D),cp(E,F))
-         nonvar(X), X = cp(_,_),
-         nonvar(Y), Y = cp(_,_),
-         nonvar(Z), Z = cp(_,_),!,
-         %write(cp_cp_cp),nl,
-         cp_to_set(1,X,Xt,Xu),
-         cp_to_set(2,Y,Yt,Yu),
-         cp_to_set(3,Z,Zt,Zu),
-         append(Xu,Yu,XYu),append(XYu,Zu,XYZu),
-         append(XYZu,R1,R3),
-         sat_un([un(Xt,Yt,Zt),set(Xt),set(Yt),set(Zt)|R3],R2,_,F).
+	nonvar(X), X = cp(_,_),
+	nonvar(Y), Y = cp(_,_),
+	nonvar(Z), Z = cp(_,_),!,
+	%write(cp_cp_cp),nl,
+	cp_to_set(1,X,Xt,Xu),
+	cp_to_set(2,Y,Yt,Yu),
+	cp_to_set(3,Z,Zt,Zu),
+	append(Xu,Yu,XYu),append(XYu,Zu,XYZu),
+	append(XYZu,R1,R3),
+	sat_un([un(Xt,Yt,Zt),set(Xt),set(Yt),set(Zt)|R3],R2,_,F).
 
 % Transforms the cp X into the corresponding extensional set T and
 % stores in U the created constraints
 cp_to_set(N,X,T,U) :-
-       cp_to_set_t(N,X,T1),
-       cp_to_set_u(N,X,U1),
-       subs_cp(N,T1,U1,T,U).
+	cp_to_set_t(N,X,T1),
+	cp_to_set_u(N,X,U1),
+	subs_cp(N,T1,U1,T,U).
 
 cp_to_set_t(_,X,{}) :-                   % X = cp({},_)
-       nonvar(X), X = cp(A,_),
-       nonvar(A), is_empty(A),!.
+	nonvar(X), X = cp(A,_),
+	nonvar(A), is_empty(A),!.
 cp_to_set_t(_,X,{}) :-                   % X = cp(_,{})
-       nonvar(X), X = cp(_,B),
-       nonvar(B), is_empty(B),!.
+	nonvar(X), X = cp(_,B),
+	nonvar(B), is_empty(B),!.
 cp_to_set_t(_,X,X) :-                   % X variable cp
-       var_st(X),!.
+	var_st(X),!.
 cp_to_set_t(N,X,T) :-                   % X = cp({Ea1,Ea2/_},{Eb1,Eb2/_}) (special case, to improve efficiency)
-       nonvar(X), X = cp(A,B),
-       nonvar(A), A = A1 with Ea1,
-       nonvar(A1), A1 = _ with Ea2,
-       nonvar(B), B = B1 with Eb1,
-       nonvar(B1), B1 = _ with Eb2,!,
-       T = N with [Ea1,Eb1] with [Ea1,Eb2] with [Ea2,Eb1] with [Ea2,Eb2].
+	nonvar(X), X = cp(A,B),
+	nonvar(A), A = A1 with Ea1,
+	nonvar(A1), A1 = _ with Ea2,
+	nonvar(B), B = B1 with Eb1,
+	nonvar(B1), B1 = _ with Eb2,!,
+	T = N with [Ea1,Eb1] with [Ea1,Eb2] with [Ea2,Eb1] with [Ea2,Eb2].
 cp_to_set_t(N,X,T) :-                   % X = cp({Ea2/_},{Eb2/_})
-       nonvar(X), X = cp(A,B),
-       nonvar(A), A = _ with Ea,
-       nonvar(B), B = _ with Eb,!,
-       T = N with [Ea,Eb].
+	nonvar(X), X = cp(A,B),
+	nonvar(A), A = _ with Ea,
+	nonvar(B), B = _ with Eb,!,
+	T = N with [Ea,Eb].
 cp_to_set_t(_,X,X).
 
 cp_to_set_u(N,X,[N=N]) :-               % X variable cp
-       var_st(X),!.
-       %write('cp_to_set_u - X variable cp'),nl.
+	var_st(X),!.
+	%write('cp_to_set_u - X variable cp'),nl.
 cp_to_set_u(N,X,[N = {}]) :-            % X = cp({y},{z})
-       nonvar(X), X = cp(A,B),
-       nonvar(A), A = Sa with _, nonvar(Sa), is_empty(Sa),
-       nonvar(B), B = Sb with _, nonvar(Sb), is_empty(Sb),!.
-       %write('cp_to_set_u - X = cp({y},{z})'),nl.
+	nonvar(X), X = cp(A,B),
+	nonvar(A), A = Sa with _, nonvar(Sa), is_empty(Sa),
+	nonvar(B), B = Sb with _, nonvar(Sb), is_empty(Sb),!.
+	%write('cp_to_set_u - X = cp({y},{z})'),nl.
 cp_to_set_u(N,X,U) :-                   % X = cp({y/Sa},{z})
-       nonvar(X), X = cp(A,B),
-       nonvar(A), A = Sa with _,
-       nonvar(B), B = Sb with _, nonvar(Sb), is_empty(Sb),!,
-       %write('cp_to_set_u - X = cp({y/Sa},{z})'),nl,
-       U = [N = cp(Sa,B), set(Sa)].
+	nonvar(X), X = cp(A,B),
+	nonvar(A), A = Sa with _,
+	nonvar(B), B = Sb with _, nonvar(Sb), is_empty(Sb),!,
+	%write('cp_to_set_u - X = cp({y/Sa},{z})'),nl,
+	U = [N = cp(Sa,B), set(Sa)].
 cp_to_set_u(N,X,U) :-                   % X = cp({y},{z/Sb})
-       nonvar(X), X = cp(A,B),
-       nonvar(A), A = Sa with _, nonvar(Sa), is_empty(Sa),
-       nonvar(B), B = Sb with _,!,
-       %write('cp_to_set_u - X = cp({y},{z/Sb})'),nl,
-       U = [N = cp(A,Sb), set(Sb)].
+	nonvar(X), X = cp(A,B),
+	nonvar(A), A = Sa with _, nonvar(Sa), is_empty(Sa),
+	nonvar(B), B = Sb with _,!,
+	%write('cp_to_set_u - X = cp({y},{z/Sb})'),nl,
+	U = [N = cp(A,Sb), set(Sb)].
 cp_to_set_u(N,X,U) :-                   % X = cp({y1,y2/Sa},{z1,z2/Sb})
-       nonvar(X), X = cp(A,B),          % (special case, to improve efficiency)
-       nonvar(A), A = A1 with Ea1,
-       nonvar(A1), A1 = Sa with Ea2,
-       nonvar(B), B = B1 with Eb1,
-       nonvar(B1), B1 = Sb with Eb2,!,
-       %write('cp_to_set_u - X = cp({y1,y2/Sa},{z1,z2/Sb})'),nl,
-       U = [un(cp({} with Ea1,Sb),cp({} with Ea2,Sb),N1),
-            un(N1,cp(Sa,Sb with Eb1 with Eb2),N),
-            set(Sa),set(Sb),set(N1)].
+	nonvar(X), X = cp(A,B),          % (special case, to improve efficiency)
+	nonvar(A), A = A1 with Ea1,
+	nonvar(A1), A1 = Sa with Ea2,
+	nonvar(B), B = B1 with Eb1,
+	nonvar(B1), B1 = Sb with Eb2,!,
+	%write('cp_to_set_u - X = cp({y1,y2/Sa},{z1,z2/Sb})'),nl,
+	U = [un(cp({} with Ea1,Sb),cp({} with Ea2,Sb),N1),
+	     un(N1,cp(Sa,Sb with Eb1 with Eb2),N),
+	     set(Sa),set(Sb),set(N1)].
 
 cp_to_set_u(N,X,U) :-                   % X = cp({y/Sa},{z/Sb})
-       nonvar(X), X = cp(A,B),
-       nonvar(A), A = Sa with Ea,
-       nonvar(B), B = Sb with Eb,!,
-       %write('cp_to_set_u - X = cp({y/Sa},{z/Sb})'),nl,
-       U = [un(cp({} with Ea,Sb),cp(Sa,Sb with Eb),N),
-            set(Sa), set(Sb)].
+	nonvar(X), X = cp(A,B),
+	nonvar(A), A = Sa with Ea,
+	nonvar(B), B = Sb with Eb,!,
+	%write('cp_to_set_u - X = cp({y/Sa},{z/Sb})'),nl,
+	U = [un(cp({} with Ea,Sb),cp(Sa,Sb with Eb),N),
+	     set(Sa), set(Sb)].
 
 cp_to_set_u(_,_,[N=N]).
 
 subs_cp(N,T1,U1,T,U) :-
-       nonvar(T1),
-       (T1 = N with E1 with E2 with E3 with E4,!, % (special case, to improve efficiency)
-        T = M with E1 with E2 with E3 with E4,
-        U1 = [un(A1,B1,N1),un(N1,B,N)|C],
-        U = [delay(un(A1,B1,N1),false),delay(un(N1,B,M),false),set(M)|C]
-        ;
-        T1 = N with E,!,
-        T = M with E,
-        (U1 = [N = A|C],!,
-         U = [M = A|C]
-         ;
-         U1 = [un(A,B,N)|C],
-         U = [delay(un(A,B,M),false),set(M)|C]
-        )
-       ).
+	nonvar(T1),
+	(	T1 = N with E1 with E2 with E3 with E4 -> % (special case, to improve efficiency)
+		T = M with E1 with E2 with E3 with E4,
+		U1 = [un(A1,B1,N1),un(N1,B,N)|C],
+		U = [delay(un(A1,B1,N1),false),delay(un(N1,B,M),false),set(M)|C]
+	;	T1 = N with E,
+		!,
+		T = M with E,
+		(	U1 = [N = A|C] ->
+			U = [M = A|C]
+		;	U1 = [un(A,B,N)|C],
+			U = [delay(un(A,B,M),false),set(M)|C]
+		)
+	).
 subs_cp(_,T,U,T,U).
 
 % get_elem(+S,?E,?R,-C): true if
@@ -4466,24 +4462,25 @@ identical_two(T1,T2,A,B) :-
 	(nonvar(A),T2==A,! ; nonvar(B),T2==B).
 
 novar_occur_check(_X,T) :-
-	var(T),!.
+	var(T),
+	!.
 novar_occur_check(X,T) :-
 	occur_check(X,T).
 
 special_cp3(X,Y,Z,TZ,A,B) :-
-         nonvar(Z), Z = cp(A,B),!,
-         tail_cp(Z,TZ),
-         (not_cp(X), tail_cp(X,TX), samevar(TX,TZ),!
-          ;
-          not_cp(Y), tail_cp(Y,TY), samevar(TY,TZ)
-         ).
+	nonvar(Z), Z = cp(A,B),!,
+	tail_cp(Z,TZ),
+	(	not_cp(X), tail_cp(X,TX), samevar(TX,TZ) ->
+		true
+	;	not_cp(Y), tail_cp(Y,TY), samevar(TY,TZ)
+	).
 special_cp3(X,Y,Z,TZ,A,B) :-
-         not_cp(Z),
-         tail_cp(Z,TZ),
-         (nonvar(X), X = cp(A,B), tail_cp(X,TX), samevar(TX,TZ),!
-          ;
-          nonvar(Y), Y = cp(A,B), tail_cp(Y,TY), samevar(TY,TZ)
-         ).
+	not_cp(Z),
+	tail_cp(Z,TZ),
+	(	nonvar(X), X = cp(A,B), tail_cp(X,TX), samevar(TX,TZ) ->
+		true
+	;	nonvar(Y), Y = cp(A,B), tail_cp(Y,TY), samevar(TY,TZ)
+	).
 
 
 %%%%%%%%%%%%%%%%%%%%%% disjointness (disj/2)
