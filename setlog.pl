@@ -30,9 +30,10 @@
 	op(670,xfx,\),
 	op(650,yfx,[with,mwith]),
 	op(150,fx,*),
-
-	setlog/0,           % for interactive use
-	setlog/1,           % to call setlog from Prolog
+	% for interactive use
+	setlog/0,
+	% to call setlog from Prolog
+	setlog/1,
 	setlog/2,
 	setlog/3,
 	setlog/4,
@@ -51,31 +52,31 @@
 
 :- use_module(library(dialect/sicstus/timeout)).
 
-:- dynamic isetlog/2.
-:- dynamic newpred_counter/1.
-:- dynamic context/1.
-:- dynamic final/0.         %default: no final
-:- dynamic nowarning/0.     %default: warning
-:- dynamic filter_on/0.     %default: no filter_on
+:- dynamic(isetlog/2).
+:- dynamic(newpred_counter/1).
+:- dynamic(context/1).
+:- dynamic(final/0).         %default: no final
+:- dynamic(nowarning/0).     %default: warning
+:- dynamic(filter_on/0).     %default: no filter_on
 
-:- dynamic nolabel/0.       %default: label
-:- dynamic noneq_elim/0.    %default: neq_elim
-:- dynamic noran_elim/0.    %default: ran_elim
-:- dynamic nocomp_elim/0.   %default: comp_elim
-:- dynamic noirules/0.      %default: irules
-:- dynamic subset_elim/0.   %default: no subset_elim
-:- dynamic trace/1.         %default: no trace
-:- dynamic int_solver/1.    %default: as specified by default_int_solver/1
+:- dynamic(nolabel/0).       %default: label
+:- dynamic(noneq_elim/0).    %default: neq_elim
+:- dynamic(noran_elim/0).    %default: ran_elim
+:- dynamic(nocomp_elim/0).   %default: comp_elim
+:- dynamic(noirules/0).      %default: irules
+:- dynamic(subset_elim/0).   %default: no subset_elim
+:- dynamic(trace/1).         %default: no trace
+:- dynamic(int_solver/1).    %default: as specified by default_int_solver/1
 
-:- dynamic strategy/1.      %modifiable configuration params
-:- dynamic path/1.
-:- dynamic rw_rules/1.
-:- dynamic fd_labeling_strategy/1.
+:- dynamic(strategy/1).      %modifiable configuration params
+:- dynamic(path/1).
+:- dynamic(rw_rules/1).
+:- dynamic(fd_labeling_strategy/1).
 
-:- multifile replace_rule/6.
-:- multifile inference_rule/7.
-:- multifile fail_rule/6.
-:- multifile equiv_rule/3.
+:- multifile(replace_rule/6).
+:- multifile(inference_rule/7).
+:- multifile(fail_rule/6).
+:- multifile(equiv_rule/3).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -150,7 +151,7 @@ top_level :-
 	nl, write_subs_constr(VarNames_ext1,Constr1Ext,Vars),
 	top_level.
 top_level :-
-	nl,write(no),nl,
+	nl, write(no), nl,
 	skip_return,
 	top_level.
 
@@ -180,7 +181,8 @@ mk_subs_ext(VarSubs,VarSubsMin) :-
 
 mk_subs_vv([],[]).
 mk_subs_vv([N1=V1|Subs],R) :-
-	var(V1),!,
+	var(V1),
+	!,
 	V1 = N1,
 	mk_subs_vv(Subs,SubsMin),
 	append(SubsMin,[true],R).
@@ -209,14 +211,13 @@ ask_the_user(_) :-
 	nl,
 	nl, write('Another solution?  (y/n)'),
 	get_single_char(C),
-	(C \== 121,!    % 'y'
-	 ;
-	 cond_retract(nowarning), fail
+	(	C \== 121,!    % 'y'
+	;	cond_retract(nowarning), fail
 	).
 
-write_subs_all([],_).
-write_subs_all([N1=V1|R],Prn) :-
-	write(N1), write(' = '), write(V1), Prn=y,
+write_subs_all([], _).
+write_subs_all([N1=V1|R], Prn) :-
+	write(N1), write(' = '), write(V1), Prn = y,
 	(	R = [] ->
 		true
 	;	R = [true|_] ->
@@ -230,41 +231,45 @@ write_constr(Constr_ext,Vars,Prn) :-
 	write_eqconstr_first(Constr_ext,Constr_ext_noeq),
 	write_constr_first(Constr_ext_noeq,Vars,Prn).
 
-write_eqconstr_first([],[]) :- !.
+write_eqconstr_first([], []).
 write_eqconstr_first([T1 = T2|R],NewR) :-
-	var(T1),!,
+	var(T1),
+	!,
 	write(',  '), nl,
 	write(T1), write(' = '), write(T2),
 	write_eqconstr_first(R,NewR).
 write_eqconstr_first([T1 = T2|R],NewR) :-
-	var(T2),!,
+	var(T2),
+	!,
 	write(',  '), nl,
 	write(T2), write(' = '), write(T1),
 	write_eqconstr_first(R,NewR).
 write_eqconstr_first([C|R],[C|NewR]) :-
 	write_eqconstr_first(R,NewR).
 
-write_constr_first([],_,_) :- !.
-write_constr_first([C|Constr],Vars,Prn) :-
+write_constr_first([], _, _).
+write_constr_first([C|Constr], Vars, Prn) :-
 	nl, write('Constraint: '),
-	write_atomic_constr(C), Prn=y,
+	write_atomic_constr(C), Prn = y,
 	write_constr_all(Constr,Vars).
 
-write_constr_all([],_) :- !.
-write_constr_all([C|Constr],Vars) :-
+write_constr_all([], _).
+write_constr_all([C|Constr], Vars) :-
 	write(', '), write_atomic_constr(C),
 	write_constr_all(Constr,Vars).
 
-write_atomic_constr(solved(C,_,_,_)) :- !,
+write_atomic_constr(solved(C,_,_,_)) :-
+	!,
 	write(C).
-write_atomic_constr(delay(irreducible(C)&true,_)) :- !,
+write_atomic_constr(delay(irreducible(C)&true,_)) :-
+	!,
 	write(irreducible(C)).
-write_atomic_constr(C) :- !,
+write_atomic_constr(C) :-
 	write(C).
 
 %%%%%%%%%%%
 
-rename_fresh_vars([],Num,Num) :- !.
+rename_fresh_vars([],Num,Num).
 rename_fresh_vars([X|R],Num,NumF) :-
 	var(X),!,
 	name(Num,NumCodeList),
@@ -578,9 +583,11 @@ setlog_rw_rules :-                        %to load the filtering rule library
 %%%% auxiliary predicates for Prolog to {log} interface
 
 remove_solved([],[]).
-remove_solved([solved(C,_,_,_)|R],[C|RR]) :- !,
+remove_solved([solved(C,_,_,_)|R],[C|RR]) :-
+	!,
 	remove_solved(R,RR).
-remove_solved([delay(irreducible(C)&true,_)|R],[irreducible(C)|RR]) :- !,
+remove_solved([delay(irreducible(C)&true,_)|R],[irreducible(C)|RR]) :-
+	!,
 	remove_solved(R,RR).
 remove_solved([C|R],[C|RR]) :-
 	remove_solved(R,RR).
@@ -590,13 +597,13 @@ set_params([P1|ParamsList]) :-
 	apply_params(P1),
 	set_params(ParamsList).
 
-apply_params(strategy(Str)) :- !,
+apply_params(strategy(Str)) :-
 	replace_unitCl(strategy(_),Str).
-apply_params(path(Path)) :- !,
+apply_params(path(Path)) :-
 	replace_unitCl(path(_),Path).
-apply_params(rw_rules(FileName)) :- !,
+apply_params(rw_rules(FileName)) :-
 	replace_unitCl(rw_rules(_),FileName).
-apply_params(fd_labeling_strategy(Str)) :- !,
+apply_params(fd_labeling_strategy(Str)) :-
 	replace_unitCl(fd_labeling_strategy(_),Str).
 
 %%% to be continued
@@ -845,7 +852,8 @@ write_built_list :-
 write_built_list.
 
 check_lib :-
-	solve(setlog_lib_help,_),!.
+	solve(setlog_lib_help,_),
+	!.
 check_lib :-
 	write('{log} library predicates not available'),nl,
 	write('Type consult_lib to load the {log} library '),nl.
@@ -1480,7 +1488,7 @@ rem_clause(_).
 
 confirm :-
 	nl, write('Are you sure you want to leave {log}? (y/n)'),
-	get(C), skip(10),
+	get_code(C), skip(10),
 	C == 121,
 	nl, write('Bye, bye. See you later').
 
@@ -1512,14 +1520,16 @@ context(usr).
 
 read_loop_np(FileStream) :-
 	setlog_read(FileStream,Clause),
-	Clause \== end_of_file,!,
+	Clause \== end_of_file,
+	!,
 	assert_or_solve(Clause),
 	read_loop_np(FileStream).
 read_loop_np(_).
 
 read_loop(FileStream,N) :-
 	setlog_read(FileStream,Clause),
-	Clause \== end_of_file,!,
+	Clause \== end_of_file,
+	!,
 	assert_or_solve(Clause,N),
 	N1 is N + 1,
 	read_loop(FileStream,N1).
@@ -1528,12 +1538,14 @@ read_loop(_,_).
 setlog_read(Stream,Term) :-
 	catch(read(Stream,Term),Msg,syntax_error_cont_msg(Msg)).
 
-assert_or_solve((:- Goal)) :-!,
+assert_or_solve((:- Goal)) :-
+	!,
 	solve(Goal,_).
 assert_or_solve(Clause) :-
 	setassert(Clause).
 
-assert_or_solve((:- Goal),_) :-!,
+assert_or_solve((:- Goal),_) :-
+	!,
 	solve(Goal,_).
 assert_or_solve(Clause,N) :-
 	setassert(Clause),
@@ -1994,7 +2006,8 @@ sat_step(nforeach(_,_,_,_),[nforeach(D,P,Fo,FP)|R1],R2,Z,F) :- !,
 %%%%%%%%%%%%%%%%%%%% constraint solving tracing
 
 trace_in(C,L) :-
-	trace(sat),!,
+	trace(sat),
+	!,
 	write('>>> Entering Level '), write(L),nl,
 	write('>>> Input constraint: '), write(C), nl,
 	write('Press return to continue '), nl,
@@ -2002,24 +2015,28 @@ trace_in(C,L) :-
 trace_in(_,_).
 
 trace_out(_C,L) :-
-	trace(sat),!,
+	trace(sat),
+	!,
 	write('<<< Level '), write(L), write(' fixed point reached'),nl,
 %DBG% write('<<< Output constraint: '), write(C),nl,
 	nl.
 trace_out(_,_).
 
 trace_irules(Rule) :-
-	trace(irules),!,
+	trace(irules),
+	!,
 	write('\n>>> Using inference rule '), write(Rule),nl.
 trace_irules(_).
 
 trace_firules(Rule) :-
-	trace(irules),!,
+	trace(irules),
+	!,
 	write('\n>>> Using filtering inference rule '), write(Rule),nl.
 trace_firules(_).
 
 trace_ffrules(Rule) :-
-	trace(irules),!,
+	trace(irules),
+	!,
 	write('\n>>> Using filtering fail rule '), write(Rule),nl.
 trace_ffrules(_).
 
@@ -2367,13 +2384,16 @@ sat_riseq_notemptyset(R,RR,R2,R3,F) :-
 %%%% auxiliary predicates for dealing with RIS
 
 ris_term(T) :-
-	nonvar(T), T = ris(_,_,_,_,_).
+	nonvar(T),
+	T = ris(_,_,_,_,_).
 
 ris_term(T,ris(CE_Dom,LVars,Fl,P,PP)) :-
-	nonvar(T), T = ris(CE_Dom,LVars,Fl,P,PP).
+	nonvar(T),
+	T = ris(CE_Dom,LVars,Fl,P,PP).
 
 var_ris(Ris) :-
-	var(Ris),!.
+	var(Ris),
+	!.
 var_ris(Ris) :-       % not well supported yet
 	ris_term(Ris,ris(_ in Dom,_,_,_,_)),!,
 	var_ris(Dom).
@@ -2426,15 +2446,15 @@ get_rest(S,X,R,C) :-                  % same as first_rest(S,X,R,C)
 get_rest(R with _,_,R,_).             % R is S without its first component and C is an unbound var.
 
 mk_atomic_constraint(B,X=X) :-
-	nonvar(B), B=true, !.
+	nonvar(B), B = true, !.
 mk_atomic_constraint(B,delay(BB,true)) :-
-	nonvar(B), B=(_B1 & _B2), !,
+	nonvar(B), B = (_B1 & _B2), !,
 	conj_append(B,true,BB).
 mk_atomic_constraint(B,delay(BB,true)) :-
-	nonvar(B), B=(_B1 or _B2), !,
+	nonvar(B), B = (_B1 or _B2), !,
 	conj_append(B,true,BB).
 mk_atomic_constraint(B,delay(B & true,true)) :-   % user-defned atomic predicates
-	nonvar(B), \+atomic_constr(B), !.
+	nonvar(B), \+ atomic_constr(B), !.
 mk_atomic_constraint(B,B).                        % primitive atomic constraints
 
 
@@ -2542,15 +2562,20 @@ eq_cp_all(S with [X,Y],A,B,[X in A,Y in B|RConst]) :-
 	eq_cp_all(S,A,B,RConst).
 
 var_st(X) :-
-	var(X),!.
+	var(X),
+	!.
 var_st(X) :-
 	X = cp(X1,X2),
-	(var(X1),! ; var(X2)).
+	(	var(X1) ->
+		true
+	;	var(X2)
+	).
 
 not_cp(T) :-
-	var(T),!.
+	var(T),
+	!.
 not_cp(T) :-
-	\+ (T = cp(_,_)).
+	T \= cp(_,_).
 
 one_cp(S1,S2,S3) :-
 	(	nonvar(S1),S1 = cp(_,_) ->
@@ -2563,11 +2588,17 @@ one_cp(S1,S2,S3) :-
 %cp_component(X,CP): true if X is one of the components of CP
 cp_component(X,CP) :-
 	CP = cp(A,B),
-	(A==X,! ; B==X).
+	(	A==X ->
+		true
+	;	B==X
+	).
 %
 %cp_component(X,CP1,CP2): true if X is one of the components of either CP1 or CP2
 cp_component(X,CP1,CP2) :-
-	(cp_component(X,CP1),! ; cp_component(X,CP2)).
+	(	cp_component(X,CP1) ->
+		true
+	;	cp_component(X,CP2)
+	).
 
 %samevarcp(X,Y): true if X and Y are the same variable CP
 samevarcp(X,Y) :-
@@ -2577,7 +2608,10 @@ samevarcp(X,Y) :-
 %
 %samevarcp(X,Y,Z): true if X and either Y or Z are the same variable CP
 samevarcp(X,Y,Z) :-
-	(samevarcp(X,Y),!; samevarcp(X,Z)).
+	(	samevarcp(X,Y) ->
+		true
+	;	samevarcp(X,Z)
+	).
 
 tail_cp(X,T) :-
 	nonvar(X), X = cp(A,B),!,
@@ -2606,13 +2640,22 @@ g_cp_elem(X,B with Y,CP with [X,Y]) :-
 %%%%%%%%%%%  Set/Multiset Unification Algorithm  %%%%%%%%%%%%
 
 sunify(X,Y,[]) :-                         % X = X
-	X == Y,!.
+	X == Y,
+	!.
 sunify(T1,T2,[T1 = T2]) :-                % ris = t or cp(...) = t
 	nonvar(T1),
-	(ris_term(T1),! ; cp_term(T1)),!.
+	(	ris_term(T1) ->
+		true
+	;	cp_term(T1)
+	),
+	!.
 sunify(T1,T2,[T1 = T2]) :-                % t = ris or t = cp(...)
 	nonvar(T2),
-	(ris_term(T2),! ; cp_term(T2)),!.
+	(	ris_term(T2) ->
+		true
+	;	cp_term(T2)
+	),
+	!.
 sunify(X,Y,C) :-                          % X = t
 	var(X),!,
 	%write(rule(sunifyXt1)),nl,
@@ -2631,23 +2674,26 @@ sunify(T1,T2,C) :-                        % intervals
 	int_term(T2), set_term(T1),!,
 	int_unify(T2,T1,C).
 sunify(X1 with X2,S,C) :-                 %
-      tail2(X1 with X2,TR), tail2(S,TS),!,
-      (tail(TR,TTR), tail(TS,TTS),        % {.../s(X)} = {../t(X)}
-       samevar(TTR,TTS),!,
-       %write('rule({t1/s(X)}={t2/t(X)})'),nl,
-       stunify_ss_special(X1 with X2,S,TR,TS,C)
-       ;
-       %write('rule({t1/X}={t2/Y}'),nl,    % {.../R} = {../S}
-       stunify_ss(X1 with X2,S,C) ).
+	tail2(X1 with X2,TR), tail2(S,TS),
+	!,
+	(	tail(TR,TTR), tail(TS,TTS),        % {.../s(X)} = {../t(X)}
+		samevar(TTR,TTS) ->
+		%write('rule({t1/s(X)}={t2/t(X)})'),nl,
+		stunify_ss_special(X1 with X2,S,TR,TS,C)
+	;	%write('rule({t1/X}={t2/Y}'),nl,    % {.../R} = {../S}
+		stunify_ss(X1 with X2,S,C)
+	).
 sunify(X1 mwith X2,Y,C) :-                % bag unification +{...} = +{...}
 	bag_tail(X1 mwith X2,BX),
-	bag_tail(Y,BY),!,
+	bag_tail(Y,BY),
+	!,
 	(	samevar(BX,BY) ->
 		stunify_bag_same(X1 mwith X2,Y,C)
 	;	stunify_bag(X1 mwith X2,Y,C)
 	).
 sunify(X,Y,C) :-                          % f(...) = f(...)
-	X=..[F|Ax],Y=..[F|Ay],!,
+	X=..[F|Ax], Y=..[F|Ay],
+	!,
 	sunifylist(Ax,Ay,C).
 
 stunify_ss_special(R,S,TR,TS,C) :-     % non-admissible constraints
@@ -2673,24 +2719,24 @@ stunify_ss_special(R,S,TR,TS,C) :-     % non-admissible constraints
 	).
 
 stunify_ss_special(R,S,TR,TS,C) :-        % admissible constraints
-      (samevar(TR,TS),!,                  % R and S are the same variable
-       %write(rule({t1/'X'}={t2/'X'})),nl,
-       stunify_samevar(R,S,TR,C)
-       ;
-       samevarris_simple(TR,TS),!,        % R and S are both "simple RIS" or S is a var.
-       %write('rule({t1/ris(X)}={t2/ris(X)}-simple RIS or {t2/ris(X)} = {t1/X}'),nl,
-       stunify_samevar_ris1(R,S,TR,TS,C)
-       ;
-       samevarris_simple_inv(TR,TS),!,    % R is a var. and S is a "simple RIS"
-       %write('rule({t1/ris(X)}={t2/X}'),nl,
-       stunify_samevar_ris1(S,R,TS,TR,C)
-       ;
-       samevarris_nonsimple(TR,TS),!,     % R and S are both "non-simple RIS"
-       %write('rule({t1/ris(X)}={t2/ris(X)} - nonsimple RIS'),nl,
-       stunify_samevar_ris2(R,S,TR,TS,C)
-       ;
-       stunify_ss(R,S,C)                  % S is a RIS with a non-var domain
-      ).
+	(samevar(TR,TS),!,                  % R and S are the same variable
+	 %write(rule({t1/'X'}={t2/'X'})),nl,
+	 stunify_samevar(R,S,TR,C)
+	 ;
+	 samevarris_simple(TR,TS),!,        % R and S are both "simple RIS" or S is a var.
+	 %write('rule({t1/ris(X)}={t2/ris(X)}-simple RIS or {t2/ris(X)} = {t1/X}'),nl,
+	 stunify_samevar_ris1(R,S,TR,TS,C)
+	 ;
+	 samevarris_simple_inv(TR,TS),!,    % R is a var. and S is a "simple RIS"
+	 %write('rule({t1/ris(X)}={t2/X}'),nl,
+	 stunify_samevar_ris1(S,R,TS,TR,C)
+	 ;
+	 samevarris_nonsimple(TR,TS),!,     % R and S are both "non-simple RIS"
+	 %write('rule({t1/ris(X)}={t2/ris(X)} - nonsimple RIS'),nl,
+	 stunify_samevar_ris2(R,S,TR,TS,C)
+	 ;
+	 stunify_ss(R,S,C)                  % S is a RIS with a non-var domain
+	).
 
 samevarris_simple(R,S) :-      % R and S are simple RIS
 	ris_term(R,ris(CtrlExpr1 in _Dom1,_,_,P1,_)),%var_ris(Dom1),
@@ -2872,145 +2918,145 @@ stunify_samevar_ris1(R with X,S with Y,_TR,TS,C) :-
 	).
 
 stunify_samevar_ris2(R with X,S with Y,TR,TS,C) :-  % {...|ris(X)} = {...|ris(X)}, non-simple RIS
-      %write(rule('{t1/ris(X)}={t2/ris(X)} - non-simple RIS')),nl,
-      select_var(Yj,S with Y,Rest),
-      (sunify(X,Yj,C1),
-       %nl,write('case 1'),nl,
-       replace_tail2(R,N1,NewR),
-       replace_tail2(Rest,N2,NewS),
-       sunify(TR,N1 with X,C2),    %1
-       sunify(TS,N2 with X,C3),
-       append([X nin N1,X nin N2,delay(NewR=NewS,false)|C1],C2,C12),
-       append(C12,C3,C)
-      ;
-       sunify(X,Yj,C1),
-       %nl,write('case 2'),nl,
-       sunify(R,Rest,C2),          %2
-       append([X nin TR,X nin TS|C1],C2,C)
-      ;
-       sunify(X,Yj,C1),
-       %nl,write('case 3'),nl,
-       replace_tail2(R,N,NewR),
-       sunify(N with X,TR,C2),     %3
-       append([X nin N,X nin TS,delay(NewR=Rest,false)|C1],C2,C)
-      ;
-       sunify(X,Yj,C1),
-       %nl,write('case 4'),nl,
-       replace_tail2(Rest,N,NewS),
-       sunify(TS,N with X,C2),     %4
-       append([X nin TR,X nin N,delay(R=NewS,false)|C1],C2,C)
-      ;
-       sunify(X,Yj,C1),
-       %nl,write('case 5'),nl,
-       sunify(R,S with Y,C2),      %5
-       append(C1,C2,C)
-      ;
-       sunify(X,Yj,C1),
-       %nl,write('case 6'),nl,
-       sunify(R with X,Rest,C2),   %6
-       append(C1,C2,C)
-      ;
-       %X \== Yj,
-       %write('case 7'),nl,
-       replace_tail(R,N,NewR),
-       replace_tail(S with Y,N,NewSS),
-       tail(TS,TTS),               %7
-       %%% gamma(n)  & Z=v(n) & X=Z  (n is CtrlExprNew)
-       ris_term(TS,ris(CE_Dom,V,Fl,P,PP)),
-       CE_Dom = (CtrlExpr in _D),
-       ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),
-       %
-       chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]),
-       find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
-       get_preconditions(PPNew,PosPre,_),
-       %
-       solve_expression(Z,PNew),
-       mk_atomic_constraint(PPNew,PPNewD),
-       conj_append(PosPre,FlNew,PreFlNew),
-       mk_atomic_constraint(PreFlNew,FlNewD),
-       %
-       Z = X,
-       %
-       %%% (Z2=u(n') & X=Z2 & phi(n') & Z2 nin Selems) or not phi(n') (n' is CtrlExpr2New and n = n')
-       ris_term(TR,ris(CE_Dom2,V2,Fl2,P2,PP2)),
-       CE_Dom2 = (CtrlExpr2 in _D2),
-       ctrl_expr(CtrlExpr2,V2,LV2,CtrlExpr2New),
-       %
-       chvar(LV2,[],Vars2,[Fl2,P2,PP2,CtrlExpr2],[],Vars2New,[Fl2New,P2New,PP2New,_]),
-       find_corr_list(CtrlExpr2,CtrlExpr2New,Vars2,Vars2New),
-       get_preconditions(PP2New,PosPre2,NegPre2),
-       CtrlExprNew=CtrlExpr2New,        % n' must be the same as n
-       %
-        (
-         solve_expression(Z2,P2New),
-         mk_atomic_constraint(PP2New,PP2NewD),
-         conj_append(PosPre2,Fl2New,PreFl2New),
-         mk_atomic_constraint(PreFl2New,Fl2NewD),
-         %
-         Z2 = X,
-         %
-         sunify(TTS,N with CtrlExprNew,C1),
-         sunify(NewR,NewSS,C2),
-         replace_tail2(S with Y,{},Selems),
-         append([FlNewD,PPNewD,Fl2NewD,PP2NewD,Z2 nin Selems|C1],C2,C)
-        ;
-         %%% not phi(n)
-         negate(Fl2New,NegFl),
-         conj_append(PosPre2,PP2New,PrePP2New),
-         conj_append(PrePP2New,NegFl,PreNegFl2),
-         mk_atomic_constraint((PreNegFl2 or NegPre2),NegFlD2),
-         %
-         %sunify(TTS,N with X,C1),
-         sunify(TTS,N with CtrlExpr2New,C1),
-         sunify(NewR,NewSS,C2),
-         append([FlNewD,PPNewD,NegFlD2|C1],C2,C)
-        )
-      ;
-       %X \== Yj,
-       final_sat([X neq Yj],_),
-       %nl,write('case 8'),nl,
-       replace_tail(R,N,NewR),
-       replace_tail(S with Y,N,NewSS),
-       %write(S with Y),nl,
-       %write(NewSS),nl,
-       tail(TS,TTS),               %8
-       %%% gamma(n)  & Z=v(n) & X=Z  (n is CtrlExprNew)
-       ris_term(TS,ris(CE_Dom,V,Fl,P,PP)),
-       CE_Dom = (CtrlExpr in _D),
-       ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),
-       %
-       chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]),
-       find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
-       get_preconditions(PPNew,PosPre,_),
-       %
-       solve_expression(Z,PNew),
-       mk_atomic_constraint(PPNew,PPNewD),
-       conj_append(PosPre,FlNew,PreFlNew),
-       mk_atomic_constraint(PreFlNew,FlNewD),
-       %
-       Z = X,
-       %
-       %%% Z2=u(n') & X=Z2 & phi(n') & Z2 = Yj (n' is CtrlExpr2New and n = n')
-       ris_term(TR,ris(CE_Dom2,V2,Fl2,P2,PP2)),
-       CE_Dom2 = (CtrlExpr2 in _D2),
-       ctrl_expr(CtrlExpr2,V2,LV2,CtrlExpr2New),
-       %
-       chvar(LV2,[],Vars2,[Fl2,P2,PP2,CtrlExpr2],[],Vars2New,[Fl2New,P2New,PP2New,_]),
-       find_corr_list(CtrlExpr2,CtrlExpr2New,Vars2,Vars2New),
-       get_preconditions(PP2New,PosPre2,_),
-       CtrlExprNew=CtrlExpr2New,        % n' must be the same as n
-       %
-       solve_expression(Z2,P2New),
-       mk_atomic_constraint(PP2New,PP2NewD),
-       conj_append(PosPre2,Fl2New,PreFl2New),
-       mk_atomic_constraint(PreFl2New,Fl2NewD),
-       %
-       Z2 = Yj,
-       %
-       sunify(TTS,N with CtrlExprNew,C1),
-       sunify(NewR with Z2,NewSS,C2),
-       append([FlNewD,PPNewD,Fl2NewD,PP2NewD|C1],C2,C)
-      ).
+	%write(rule('{t1/ris(X)}={t2/ris(X)} - non-simple RIS')),nl,
+	select_var(Yj,S with Y,Rest),
+	(sunify(X,Yj,C1),
+	 %nl,write('case 1'),nl,
+	 replace_tail2(R,N1,NewR),
+	 replace_tail2(Rest,N2,NewS),
+	 sunify(TR,N1 with X,C2),    %1
+	 sunify(TS,N2 with X,C3),
+	 append([X nin N1,X nin N2,delay(NewR=NewS,false)|C1],C2,C12),
+	 append(C12,C3,C)
+	;
+	 sunify(X,Yj,C1),
+	 %nl,write('case 2'),nl,
+	 sunify(R,Rest,C2),          %2
+	 append([X nin TR,X nin TS|C1],C2,C)
+	;
+	 sunify(X,Yj,C1),
+	 %nl,write('case 3'),nl,
+	 replace_tail2(R,N,NewR),
+	 sunify(N with X,TR,C2),     %3
+	 append([X nin N,X nin TS,delay(NewR=Rest,false)|C1],C2,C)
+	;
+	 sunify(X,Yj,C1),
+	 %nl,write('case 4'),nl,
+	 replace_tail2(Rest,N,NewS),
+	 sunify(TS,N with X,C2),     %4
+	 append([X nin TR,X nin N,delay(R=NewS,false)|C1],C2,C)
+	;
+	 sunify(X,Yj,C1),
+	 %nl,write('case 5'),nl,
+	 sunify(R,S with Y,C2),      %5
+	 append(C1,C2,C)
+	;
+	 sunify(X,Yj,C1),
+	 %nl,write('case 6'),nl,
+	 sunify(R with X,Rest,C2),   %6
+	 append(C1,C2,C)
+	;
+	 %X \== Yj,
+	 %write('case 7'),nl,
+	 replace_tail(R,N,NewR),
+	 replace_tail(S with Y,N,NewSS),
+	 tail(TS,TTS),               %7
+	 %%% gamma(n)  & Z=v(n) & X=Z  (n is CtrlExprNew)
+	 ris_term(TS,ris(CE_Dom,V,Fl,P,PP)),
+	 CE_Dom = (CtrlExpr in _D),
+	 ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),
+	 %
+	 chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]),
+	 find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
+	 get_preconditions(PPNew,PosPre,_),
+	 %
+	 solve_expression(Z,PNew),
+	 mk_atomic_constraint(PPNew,PPNewD),
+	 conj_append(PosPre,FlNew,PreFlNew),
+	 mk_atomic_constraint(PreFlNew,FlNewD),
+	 %
+	 Z = X,
+	 %
+	 %%% (Z2=u(n') & X=Z2 & phi(n') & Z2 nin Selems) or not phi(n') (n' is CtrlExpr2New and n = n')
+	 ris_term(TR,ris(CE_Dom2,V2,Fl2,P2,PP2)),
+	 CE_Dom2 = (CtrlExpr2 in _D2),
+	 ctrl_expr(CtrlExpr2,V2,LV2,CtrlExpr2New),
+	 %
+	 chvar(LV2,[],Vars2,[Fl2,P2,PP2,CtrlExpr2],[],Vars2New,[Fl2New,P2New,PP2New,_]),
+	 find_corr_list(CtrlExpr2,CtrlExpr2New,Vars2,Vars2New),
+	 get_preconditions(PP2New,PosPre2,NegPre2),
+	 CtrlExprNew=CtrlExpr2New,        % n' must be the same as n
+	 %
+	  (
+	   solve_expression(Z2,P2New),
+	   mk_atomic_constraint(PP2New,PP2NewD),
+	   conj_append(PosPre2,Fl2New,PreFl2New),
+	   mk_atomic_constraint(PreFl2New,Fl2NewD),
+	   %
+	   Z2 = X,
+	   %
+	   sunify(TTS,N with CtrlExprNew,C1),
+	   sunify(NewR,NewSS,C2),
+	   replace_tail2(S with Y,{},Selems),
+	   append([FlNewD,PPNewD,Fl2NewD,PP2NewD,Z2 nin Selems|C1],C2,C)
+	  ;
+	   %%% not phi(n)
+	   negate(Fl2New,NegFl),
+	   conj_append(PosPre2,PP2New,PrePP2New),
+	   conj_append(PrePP2New,NegFl,PreNegFl2),
+	   mk_atomic_constraint((PreNegFl2 or NegPre2),NegFlD2),
+	   %
+	   %sunify(TTS,N with X,C1),
+	   sunify(TTS,N with CtrlExpr2New,C1),
+	   sunify(NewR,NewSS,C2),
+	   append([FlNewD,PPNewD,NegFlD2|C1],C2,C)
+	  )
+	;
+	 %X \== Yj,
+	 final_sat([X neq Yj],_),
+	 %nl,write('case 8'),nl,
+	 replace_tail(R,N,NewR),
+	 replace_tail(S with Y,N,NewSS),
+	 %write(S with Y),nl,
+	 %write(NewSS),nl,
+	 tail(TS,TTS),               %8
+	 %%% gamma(n)  & Z=v(n) & X=Z  (n is CtrlExprNew)
+	 ris_term(TS,ris(CE_Dom,V,Fl,P,PP)),
+	 CE_Dom = (CtrlExpr in _D),
+	 ctrl_expr(CtrlExpr,V,LV,CtrlExprNew),
+	 %
+	 chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]),
+	 find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
+	 get_preconditions(PPNew,PosPre,_),
+	 %
+	 solve_expression(Z,PNew),
+	 mk_atomic_constraint(PPNew,PPNewD),
+	 conj_append(PosPre,FlNew,PreFlNew),
+	 mk_atomic_constraint(PreFlNew,FlNewD),
+	 %
+	 Z = X,
+	 %
+	 %%% Z2=u(n') & X=Z2 & phi(n') & Z2 = Yj (n' is CtrlExpr2New and n = n')
+	 ris_term(TR,ris(CE_Dom2,V2,Fl2,P2,PP2)),
+	 CE_Dom2 = (CtrlExpr2 in _D2),
+	 ctrl_expr(CtrlExpr2,V2,LV2,CtrlExpr2New),
+	 %
+	 chvar(LV2,[],Vars2,[Fl2,P2,PP2,CtrlExpr2],[],Vars2New,[Fl2New,P2New,PP2New,_]),
+	 find_corr_list(CtrlExpr2,CtrlExpr2New,Vars2,Vars2New),
+	 get_preconditions(PP2New,PosPre2,_),
+	 CtrlExprNew=CtrlExpr2New,        % n' must be the same as n
+	 %
+	 solve_expression(Z2,P2New),
+	 mk_atomic_constraint(PP2New,PP2NewD),
+	 conj_append(PosPre2,Fl2New,PreFl2New),
+	 mk_atomic_constraint(PreFl2New,Fl2NewD),
+	 %
+	 Z2 = Yj,
+	 %
+	 sunify(TTS,N with CtrlExprNew,C1),
+	 sunify(NewR with Z2,NewSS,C2),
+	 append([FlNewD,PPNewD,Fl2NewD,PP2NewD|C1],C2,C)
+	).
 
 sunifylist([],[],[]).
 sunifylist([X|AX],[Y|AY],C) :-
@@ -3399,12 +3445,12 @@ allintvars(E,Evars) :-     % true if E is an arithmetic expression and Evars
 	E =.. [_F|Args],       % is a list containing a contraint integer(X) for
 	addint(Args,Evars).    % each variable X in E
 
-addint([],[]) :-!.
-addint([X|R],[integer(X)|Rvars]) :-
+addint([], []).
+addint([X|R], [integer(X)|Rvars]) :-
 	var(X),
 	!,
 	addint(R,Rvars).
-addint([E|R],Allvars) :-
+addint([E|R], Allvars) :-
 	allintvars(E,Evars),
 	addint(R,Rvars),
 	append(Evars,Rvars,Allvars).
@@ -4128,39 +4174,39 @@ sat_un_t([un(S,T,X)|R1],R2,c,F) :-                    % un(s1,{...},X) (bounded 
 %%% un(s1,s2,X) (X variable-cp)
 
 sat_un_vcp([un(S,T,X)|R1],R2,c,F) :-                  % un({.../S},T,cp(A,B)), and either A or B are variables
-         nonvar(S), S = N1 with T1, T1 = [A1,B1],!,
-         %write('---unCP - un({.../S},T,cp(A,B)), and A or B are vars'),nl,
-         ( not_cp(T),!,                              % un({.../S},T,cp(A,B)), not_cp(T)
-           %write('------unCP - un({.../S},T,cp(A,B)), not_cp(T)'),nl,
-           sat_eq([X = N with [A1,B1],
-                     un(N1,T,N),
-                     set(N),set(N1)|R1],R2,_,F)
-         ;
-           nonvar(X), X = cp(A,B), A == B, T == X,!,            % un({.../S},cp(A,A),cp(A,A))
-           %write('------unCP - un({.../S},cp(A,A),cp(A,A))'),nl,
-           sunify(A,N with A1 with B1,CA),append(CA,R1,R3),
-           sunify(N2,N3 with [A1,A1] with [B1,A1] with [B1,B1],CN2),
-           append(CN2,R3,R4),
-           sat_nin([A1 nin N, B1 nin N,
-                     [A1,A1] nin N3, [B1,A1] nin N3, [B1,B1] nin N3,
-                     un(N1,N2,N2),
-                     delay(un(cp({} with A1,N),
-                              cp({} with B1,N),N4),false),
-                     delay(un(N4,cp(N,N with A1 with B1),N3),false),
-                     set(N),rel(N1),rel(N2)|R4],R2,_,F)
-         ;
-           nonvar(X), X = cp(A,B),
-           nonvar(T), T = cp(C,D), A == C, B == D,!, % un({.../S},cp(A,B),cp(A,B))
-           %write('------unCP - un({.../S},cp(A,B),cp(A,B))'),nl,
-           sunify(X,N with T1,CX),append(CX,R1,R3),
-%%           sat_step([subset(N1,N),set(N),set(N1)|R3],R2,_,F)
-           sat_nin([T1 nin N,un(N1,N,N),set(N),set(N1)|R3],R2,_,F)
-         ;
-           nonvar(T), T = cp(_,_),!,                 % un({.../S},cp(_,_),cp(A,B))
-           %write('------unCP - un({.../S},cp(_,_),cp(A,B))'),nl,
-           sunify(X,N with T1,CX),append(CX,R1,R3),
-           sat_un([un(N1,T,N),set(N),set(N1)|R3],R2,_,F)
-         ).
+	nonvar(S), S = N1 with T1, T1 = [A1,B1],!,
+	%write('---unCP - un({.../S},T,cp(A,B)), and A or B are vars'),nl,
+	( not_cp(T),!,                              % un({.../S},T,cp(A,B)), not_cp(T)
+	  %write('------unCP - un({.../S},T,cp(A,B)), not_cp(T)'),nl,
+	  sat_eq([X = N with [A1,B1],
+	            un(N1,T,N),
+	            set(N),set(N1)|R1],R2,_,F)
+	;
+	  nonvar(X), X = cp(A,B), A == B, T == X,!,            % un({.../S},cp(A,A),cp(A,A))
+	  %write('------unCP - un({.../S},cp(A,A),cp(A,A))'),nl,
+	  sunify(A,N with A1 with B1,CA),append(CA,R1,R3),
+	  sunify(N2,N3 with [A1,A1] with [B1,A1] with [B1,B1],CN2),
+	  append(CN2,R3,R4),
+	  sat_nin([A1 nin N, B1 nin N,
+	            [A1,A1] nin N3, [B1,A1] nin N3, [B1,B1] nin N3,
+	            un(N1,N2,N2),
+	            delay(un(cp({} with A1,N),
+	                     cp({} with B1,N),N4),false),
+	            delay(un(N4,cp(N,N with A1 with B1),N3),false),
+	            set(N),rel(N1),rel(N2)|R4],R2,_,F)
+	;
+	  nonvar(X), X = cp(A,B),
+	  nonvar(T), T = cp(C,D), A == C, B == D,!, % un({.../S},cp(A,B),cp(A,B))
+	  %write('------unCP - un({.../S},cp(A,B),cp(A,B))'),nl,
+	  sunify(X,N with T1,CX),append(CX,R1,R3),
+%%	sat_step([subset(N1,N),set(N),set(N1)|R3],R2,_,F)
+	  sat_nin([T1 nin N,un(N1,N,N),set(N),set(N1)|R3],R2,_,F)
+	;
+	  nonvar(T), T = cp(_,_),!,                 % un({.../S},cp(_,_),cp(A,B))
+	  %write('------unCP - un({.../S},cp(_,_),cp(A,B))'),nl,
+	  sunify(X,N with T1,CX),append(CX,R1,R3),
+	  sat_un([un(N1,T,N),set(N),set(N1)|R3],R2,_,F)
+	).
 sat_un_vcp([un(T,S,X)|R1],R2,c,F) :-                  % un(T,{.../S},cp(A,B)) --> un({.../S},T,cp(A,B))
 	nonvar(S), S=_T2 with _T1,!,
 	%write('---unCP - un(T,{.../S},cp(A,B)), and A or B are vars'),nl,
@@ -5374,11 +5420,11 @@ sat_dom_cp([dom(S,D)|R1],R2,c,F) :-                % dom(s,cp({},_)) or dom(s,cp
 	append(C,R1,R3),
 	sat_step(R3,R2,_,F).
 sat_dom_cp([dom(S,D)|R1],R2,c,F) :-                % dom(s,cp(...))
-        nonvar(D), D = cp(A,B),
-        A = A1 with Ea, B = B1 with Eb,!,
-        sat_step([dom(S,N with [Ea,Eb]),
-                  un(cp({} with Ea,B1),cp(A1,B1 with Eb),N),
-                  set(N),set(A1),set(B1) |R1],R2,_,F).
+	nonvar(D), D = cp(A,B),
+	A = A1 with Ea, B = B1 with Eb,!,
+	sat_step([dom(S,N with [Ea,Eb]),
+	          un(cp({} with Ea,B1),cp(A1,B1 with Eb),N),
+	          set(N),set(A1),set(B1) |R1],R2,_,F).
 sat_dom_cp([dom(S,D)|R1],R2,c,F) :-                % dom(cp(...),d)
 	nonvar(S), S = cp(A,B),
 	sunify(A,D,C),
@@ -5451,34 +5497,31 @@ sat_inv_same_tail([inv(R,S)|R1],R2,c,F,T) :-      % inv({.../R},{.../R}), var R 
 	S = _ with [_,_],
 	R = RR with [X1,Y1],
 	replace_tail(S,{},Selems),
-	(sunify(N1 with [Y1,X1],Selems,C),
-	 append(C,R1,R3),
-	 sat_step([[Y1,X1] nin N1, %%??
-	           un(T,N1,N2),inv(RR,N2)|R3],R2,_,F)
-	;
-	 T = N with [X1,Y1] with [Y1,X1],
-	 replace_tail(R,{},Relems),
-	 replace_tail(RR,N,RRnew),
-	 replace_tail(S,N,SSnew),
-	 sat_step([[Y1,X1] nin Selems,[X1,Y1] nin Selems,
-	           [Y1,X1] nin Relems,inv(RRnew,SSnew)|R1],R2,_,F)
-	;
-	 T = N with [X1,Y1] with [Y1,X1],
-	 replace_tail(S,N,SSnew),
-	 replace_tail(RR,{},RRelems),
-	 sunify(N3 with [Y1,X1],RRelems,C),
-	 append(C,R1,R3),
-	 sat_step([[Y1,X1] nin Selems,[X1,Y1] nin Selems,
-	           [Y1,X1] nin N3,
-	           un(N,N3,N4),inv(N4,SSnew)|R3],R2,_,F)
-	;
-	 sunify(N5 with [X1,Y1],Selems,C),
-	 append(C,R1,R3),
-	 T = N with [Y1,X1],
-	 replace_tail(RR,N,RRnew),
-	 sat_step([
-	           %% [X1,Y1] nin N5, %% ??
-	           [Y1,X1] nin Selems,un(N,N5,N6),inv(RRnew,N6)|R3],R2,_,F)
+	(	sunify(N1 with [Y1,X1],Selems,C),
+		append(C,R1,R3),
+		sat_step([[Y1,X1] nin N1, %%??
+		          un(T,N1,N2),inv(RR,N2)|R3],R2,_,F)
+	;	T = N with [X1,Y1] with [Y1,X1],
+		replace_tail(R,{},Relems),
+		replace_tail(RR,N,RRnew),
+		replace_tail(S,N,SSnew),
+		sat_step([[Y1,X1] nin Selems,[X1,Y1] nin Selems,
+		          [Y1,X1] nin Relems,inv(RRnew,SSnew)|R1],R2,_,F)
+	;	T = N with [X1,Y1] with [Y1,X1],
+		replace_tail(S,N,SSnew),
+		replace_tail(RR,{},RRelems),
+		sunify(N3 with [Y1,X1],RRelems,C),
+		append(C,R1,R3),
+		sat_step([[Y1,X1] nin Selems,[X1,Y1] nin Selems,
+		          [Y1,X1] nin N3,
+		          un(N,N3,N4),inv(N4,SSnew)|R3],R2,_,F)
+	;	sunify(N5 with [X1,Y1],Selems,C),
+		append(C,R1,R3),
+		T = N with [Y1,X1],
+		replace_tail(RR,N,RRnew),
+		sat_step([
+		          %% [X1,Y1] nin N5, %% ??
+		          [Y1,X1] nin Selems,un(N,N5,N6),inv(RRnew,N6)|R3],R2,_,F)
 	).
 
 
@@ -5907,17 +5950,17 @@ sat_rres([rres(R,A,S)|R1],R2,Stop,nf) :-         % rres(R,A,S), A,R,S variables:
 	var(A), var(R), var(S), !,
 	sat_step([delay(rres(R,A,S),prolog_call(novar3(A,R,S))) | R1],R2,Stop,nf).
 sat_rres([rres(R,A,S)|R1],R2,c,F) :-              % rres(R,A,S)
-        sat_step([un(S,T,R),rel(T),ran(S,B),set(B),subset(B,A),ran(T,C),set(C),disj(A,C)
-        |R1],R2,_,F).
+	sat_step([un(S,T,R),rel(T),ran(S,B),set(B),subset(B,A),ran(T,C),set(C),disj(A,C)
+	|R1],R2,_,F).
 
 %%%%%%%%%%%%%%%%%%%%%% domain anti-restriction (dares/3)
 
 sat_dares([dares(A,R,S)|R1],R2,Stop,nf) :-       % dares(A,R,S), A,R,S variables: delayed
-        var(A), var(R), var(S), !,
-        sat_step([delay(dares(A,R,S),prolog_call(novar3(A,R,S))) | R1],R2,Stop,nf).
+	var(A), var(R), var(S), !,
+	sat_step([delay(dares(A,R,S),prolog_call(novar3(A,R,S))) | R1],R2,Stop,nf).
 sat_dares([dares(A,R,S)|R1],R2,c,F) :-           % dares(A,R,S)
-        sat_step([un(S,T,R),rel(T),dom(S,B),set(B),dom(T,C),set(C),subset(C,A),disj(A,B)
-        |R1],R2,_,F).
+	sat_step([un(S,T,R),rel(T),dom(S,B),set(B),dom(T,C),set(C),subset(C,A),disj(A,B)
+	|R1],R2,_,F).
 
 %%%%%%%%%%%%%%%%%%%%%% range anti-restriction (rares/3)
 
@@ -5945,13 +5988,13 @@ sat_oplus([oplus(R,S,T)|R1],R2,c,F) :-            % oplus(R,S,T)
 %%%%%%%%%%%%%%%%%%%%%% not binary relation (nrel/1)
 
 sat_nrel([nrel(X)|R1],R2,c,F) :-                  % nrel(X)
-        sat_step([set(X), N in X, npair(N) |R1],R2,_,F).
+	sat_step([set(X), N in X, npair(N) |R1],R2,_,F).
 
 %%%%%%%%%%%%%%%%%%%%%% not partial function (npfun/1)
 
 %sat_npfun([npfun(X)|R1],[npfun(X)|R2],Stop,nf) :- % delayed until final_sat is called
-%         var(X),!,                               % (--> Level 3)
-%         sat_step(R1,R2,Stop,nf).
+%	var(X),!,                               % (--> Level 3)
+%	sat_step(R1,R2,Stop,nf).
 sat_npfun([npfun(X)|R1],R2,c,F) :-                % npfun(X)
 	(	sat_step([set(X), [N1,N2] in X, [N1,N3] in X, N2 neq N3 |R1],R2,_,F)
 	;	sat_step([set(X), nrel(X) |R1],R2,_,F)
@@ -6872,22 +6915,22 @@ add_ran_un(pfun,X,Y,Z,AddedC,L,NewC) :-
                         un(RX,RY,RZ)|NewC].
 
 add_dom_neq(rel,S,D,AddedC,L,NewC) :-
-    AddedC = [solved(dom(S,D),(var(S),var(D)),[1|L],f),S neq {}|NewC].
+	AddedC = [solved(dom(S,D),(var(S),var(D)),[1|L],f),S neq {}|NewC].
 add_dom_neq(pfun,S,D,AddedC,L,NewC) :-
-    AddedC = [solved(dompf(S,D),(var(S),var(D)),[1|L],f),S neq {}|NewC].
+	AddedC = [solved(dompf(S,D),(var(S),var(D)),[1|L],f),S neq {}|NewC].
 
 add_dom_neqd(rel,S,D,AddedC,L,NewC) :-
-    AddedC = [solved(dom(S,D),(var(S),var(D)),[1|L],f),D neq {}|NewC].
+	AddedC = [solved(dom(S,D),(var(S),var(D)),[1|L],f),D neq {}|NewC].
 add_dom_neqd(pfun,S,D,AddedC,L,NewC) :-
-    AddedC = [solved(dompf(S,D),(var(S),var(D)),[1|L],f),D neq {}|NewC].
+	AddedC = [solved(dompf(S,D),(var(S),var(D)),[1|L],f),D neq {}|NewC].
 
 add_ran_size(S,R,M,N,AddedC,L,NewC) :-
-    noran_elim,!,
-    AddedC = [solved(ran(S,R),(var(S),var(R);var(S),nonvar(R),\+(is_empty(R))),[2|L],f),
-               size(S,N),size(R,M),integer(N),integer(M)|NewC].
+	noran_elim,!,
+	AddedC = [solved(ran(S,R),(var(S),var(R);var(S),nonvar(R),\+(is_empty(R))),[2|L],f),
+		size(S,N),size(R,M),integer(N),integer(M)|NewC].
 add_ran_size(S,R,M,N,AddedC,L,NewC) :-
-    AddedC = [solved(ran(S,R),(var(S),var(R)),[2|L],f),
-               size(S,N),size(R,M),integer(N),integer(M)|NewC].
+	AddedC = [solved(ran(S,R),(var(S),var(R)),[2|L],f),
+		size(S,N),size(R,M),integer(N),integer(M)|NewC].
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%           Level 3           %%%%%%%%%%%%%%%%
@@ -7062,26 +7105,25 @@ labeling_FD([_X|L],R) :-
 labeling1(_X,inf.._B,[]) :- !.     % e.g., X in inf..1  --> no labeling
 labeling1(_X,_A..sup,[]) :- !.     % e.g., X in 1..sup  --> no labeling
 labeling1(X,(I) \/ (A..sup),R) :-  % e.g., X in (inf..2)\/(4..5)\/(7..9)\/(11..sup)
-        first_int(I,inf..B,J),!,   % --> labeling on the bounded part
-       (X in J, R=[X]
-        ;
-        X in (inf..B), R=[]
-        ;
-        X in (A..sup), R=[]).
+	first_int(I,inf..B,J),!,   % --> labeling on the bounded part
+	(	X in J, R=[X]
+	;	X in (inf..B), R=[]
+	;	X in (A..sup), R=[]
+	).
 labeling1(X,(I) \/ (A..sup),R) :- !, % e.g., X in (1..2)\/(4..5)\/(7..sup)
-       (X in I, R=[X]                % --> labeling on the bounded part
-        ;
-        X in (A..sup), R=[]).
+	(	X in I, R=[X]                % --> labeling on the bounded part
+	;	X in (A..sup), R=[]
+	).
 labeling1(X,(I) \/ (In),R) :-      % e.g., X in (inf..2)\/(4..5)\/(7..9)
-        first_int(I,inf..B,J),!,   % --> labeling on the bounded part
-       (X in (J) \/ (In), R=[X]
-        ;
-        X in (inf..B), R=[]).
+	first_int(I,inf..B,J),!,   % --> labeling on the bounded part
+	(	X in (J) \/ (In), R=[X]
+	;	X in (inf..B), R=[]
+	).
 labeling1(X,_D,[X]).               % e.g., X in (1..2)\/(4..5)\/(7..9)
 
 first_int((A .. B),(A .. B),(1 .. 0)) :- !.      % first_int(+Int,?Rest,?First)
 first_int((I) \/ (In),I0,(IRest) \/ (In)) :-     % 'Int' is a disj. of intervals and
-       first_int(I,I0,IRest).                    % 'First' is the first disjunct
+	first_int(I,I0,IRest).                    % 'First' is the first disjunct
                                                  % 'Rest' the remaining part
 
 %add_FDc(SETc,SETFDc,R)
@@ -7625,9 +7667,9 @@ bag_preproc_bag(M,Y mwith B,Constrs) :-!,
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% type constraints generation
 
 gen_type_constrs(_T1 in T2,C) :- !,
-    (other_aggrs(off),!,C=[set(T2)] ; C=[]).
+	(other_aggrs(off),!,C=[set(T2)] ; C=[]).
 gen_type_constrs(_T1 nin T2,C) :- !,
-    (other_aggrs(off),!,C=[set(T2)] ; C=[]).
+	(other_aggrs(off),!,C=[set(T2)] ; C=[]).
 gen_type_constrs(un(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
 gen_type_constrs(nun(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
 gen_type_constrs(disj(T1,T2),[set(T1),set(T2)]) :- !.
@@ -7887,21 +7929,23 @@ ruq_in_goal(delay(A,G),delay(A1,G1),_,RR) :-
 	ruq_in_goal(G,G1,G,RR).
 
 ruq_in_goal(forall(X in _S,_Y),_,_,_) :-
-	nonvar(X), !,
+	nonvar(X),
+	!,
 	write('ERROR - Control variable in a R.U.Q. must be a variable term!'), nl,
 	fail.
 ruq_in_goal(forall(X in S,G),NewG,_,_) :-
-	!, extract_vars(G,V),
+	!,
+	extract_vars(G,V),
 	remove_var(X,V,Vars),
 	check_control_var_RUQ(V,Vars),
 	length(V,N),
 	newpred(Gpred,N,[115, 101, 116, 108, 111, 103, 82, 85, 81, 95]),	   %"setlogRUQ_"
 	Gpred =.. [_,X|Vars],
 	tmp_switch_ctxt(OldCtxt),
-	( G = exists(_Var,B),!,
-	  setassert((Gpred :- B))
-	 ;
-	  setassert((Gpred :- G)) ),
+	(	G = exists(_Var,B) ->
+		setassert((Gpred :- B))
+	;	setassert((Gpred :- G))
+	),
 	switch_ctxt(OldCtxt,_),
 	functor(Gpred,F,N),
 	NewG = ruq_call(S,F,Vars).
@@ -8304,11 +8348,16 @@ norep_in_set(R with A,S with A) :-
 
 set_length(S,N) :-
 	set_length(S,0,N).
+
 set_length(X,_,_) :-
-	var(X), !, fail.
+	var(X),
+	!,
+	fail.
 set_length(S,N,N) :-
-	is_empty(S), !.
-set_length(int(A,B),N,M) :- !,
+	is_empty(S),
+	!.
+set_length(int(A,B),N,M) :-
+	!,
 	M is N + (B - A) + 1.
 set_length(R with _X,N,M) :-
 	N1 is N + 1,
@@ -8317,7 +8366,8 @@ set_length(R with _X,N,M) :-
 set_member_strong(A,B) :-
 	nonvar(B),
 	B = _ with X,
-	A == X,!.
+	A == X,
+	!.
 set_member_strong(A,B) :-
 	nonvar(B),
 	B = Y with _,
@@ -8336,15 +8386,15 @@ list_to_set(L,S,[]) :-            % list_to_set(+list,?set,-constraint)
 list_to_set(L,S,C) :-
 	mk_test_set(L,S,C).
 
-mk_set([],{}) :- !.
-mk_set([X|L],R with X) :-
-	mk_set(L,R).
+mk_set([], {}).
+mk_set([X|L], R with X) :-
+	mk_set(L, R).
 
-mk_test_set([],{},[]) :- !.
-mk_test_set([X|L],S,Cout) :-
-	sunify(S,R with X,C1),
-	list_to_set(L,R,C2),
-	append(C1,C2,Cout).
+mk_test_set([], {}, []).
+mk_test_set([X|L], S, Cout) :-
+	sunify(S, R with X, C1),
+	list_to_set(L, R, C2),
+	append(C1, C2, Cout).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%     Interval manipulation
@@ -8358,12 +8408,15 @@ int_term(T,A,B) :-                   % not used
 
 closed_intv(T,A,B) :-                   % closed_intv(I,A,B) is true if I is a term that
 	nonvar(T),                    % denotes the closed interval int(A,B)
-	T=int(A,B),
+	T = int(A,B),
 	integer(A), integer(B),!.
 
 open_intv(S) :-
 	nonvar(S), S = int(A,B),
-	(var(A),! ; var(B)).
+	(	var(A)	->
+		true
+	;	var(B)
+	).
 
 nonopen_intv(S) :-
 	open_intv(S),!,
@@ -8523,11 +8576,14 @@ aggr_comps([X | R],X,R).          % list
 first_rest(R with X,X,R,[]) :- !.     % first_rest(S,X,R,C): true if: S is a not-empty set (interval, RIS, CP)
 first_rest(int(X,B),X,R,[]) :-        % R is S without its first component and
 	integer(X), integer(B),       % X is the first component of S and C is the list of computed constraints
-	X < B,!, X1 is X + 1,
+	X < B,
+	!,
+	X1 is X + 1,
 	R = int(X1,B).
 first_rest(int(X,B),X,{},[]) :-
 	integer(X), integer(B),
-	X = B,!.
+	X = B,
+	!.
 first_rest(RIS,A,R,C) :-
 	ris_term(RIS,RISe), !,
 	final_sat([RISe = R with A, A nin R, set(R)],C),!.
@@ -8543,10 +8599,14 @@ var_ris_st(X) :-
 	var_ris(Dom).
 var_ris_st(X) :-
 	X = cp(X1,X2),
-	(var(X1),! ; var(X2)).
+	(	var(X1) ->
+		true
+	;	var(X2)
+	).
 
 var_ris_st(X,X) :-
-	var(X),!.
+	var(X),
+	!.
 var_ris_st(X,Dom) :-
 	ris_term(X,ris(_ in Dom,_,_,_,_)),
 	!,
@@ -8564,10 +8624,16 @@ var_ris_st(X,X2) :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 simple_integer_expr(E) :-
-	(var(E),! ; integer(E)).
+	(	var(E) ->
+		true
+	;	integer(E)
+	).
 
 simple_arithm_expr(E) :-
-	(var(E),! ; number(E)).
+	(	var(E) ->
+		true
+	;	number(E)
+	).
 
 arithm_expr(E) :-        % true if E is a ground arithmetic expression
 	catch(_X is E,_Error,(write('Problem in arithmetic expression'),nl,fail)).
