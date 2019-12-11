@@ -5511,31 +5511,30 @@ sat_ran([ran(S,D)|R1],[ran(S,D)|R2],Stop,F) :-     % ran(S,R) or ran(S,r) - irre
 	var(S), noran_elim,!,
 	sat_step(R1,R2,Stop,F).
 sat_ran([ran(S,D)|R1],R2,c,F) :-                   % ran({[...],...},R) or ran({[...],...},{...}) or ran({[...],...},int(t1,t2))
-        nonvar(S), S = SR with [_A1,A2], noran_elim,!,
-        sunify(D,DR with A2,C),
-        append(C,R1,R3),
-        (var(SR),nonvar(DR), DR=_ with _,!,
-         sat_step([solved(ran(SR,DR),var(SR),[],f),rel(SR),set(DR)|R3],R2,_,F)
-         ;
-         sat_step([ran(SR,DR),rel(SR),set(DR)|R3],R2,_,F)
-        ).
+	nonvar(S), S = SR with [_A1,A2], noran_elim,!,
+	sunify(D,DR with A2,C),
+	append(C,R1,R3),
+	(	var(SR),nonvar(DR), DR=_ with _ ->
+		sat_step([solved(ran(SR,DR),var(SR),[],f),rel(SR),set(DR)|R3],R2,_,F)
+	;	sat_step([ran(SR,DR),rel(SR),set(DR)|R3],R2,_,F)
+	).
 sat_ran([ran(S,D)|R1],R2,c,F) :-                   % ran(S,{t})
-        var(S), nonvar(D), D = E with A, nonvar(E), is_empty(E), !,
-        sat_step([comp(R,{} with [A,A],R),S = R with [Z,A],[Z,A] nin R,rel(R)|R1],R2,_,F).
+	var(S), nonvar(D), D = E with A, nonvar(E), is_empty(E), !,
+	sat_step([comp(R,{} with [A,A],R),S = R with [Z,A],[Z,A] nin R,rel(R)|R1],R2,_,F).
 sat_ran([ran(S,D)|R1],[ran(S,D)|R2],Stop,nf) :-   % ran(S,D), S var.
-        var(S),!,                                 % delayed until final_sat is called
-        sat_step(R1,R2,Stop,nf).                  % (--> Level 3)
+	var(S),!,                                 % delayed until final_sat is called
+	sat_step(R1,R2,Stop,nf).                  % (--> Level 3)
 sat_ran([ran(S,D)|R1],R2,c,f) :-                   % ran(S,{t1,...,tn}), n > 1 or ran(S,{t1/R}),
-        var(S), nonvar(D), D = _DR with A,!,
-        sunify(D,DR with A,C),
-        append(C,R1,R3),
-        sat_step([A nin DR,ran(S1,{} with A),ran(S2,DR),
-                  delay(un(S1,S2,S),false),rel(S1),rel(S2),set(DR)|R3],R2,_,f).
+	var(S), nonvar(D), D = _DR with A,!,
+	sunify(D,DR with A,C),
+	append(C,R1,R3),
+	sat_step([A nin DR,ran(S1,{} with A),ran(S2,DR),
+	          delay(un(S1,S2,S),false),rel(S1),rel(S2),set(DR)|R3],R2,_,f).
 sat_ran([ran(S,D)|R1],R2,c,F) :-                   % ran({[...],...},R) or ran({[...],...},{...}) or ran({[...],...},int(t1,t2))
-        nonvar(S), S = SR with [_A1,A2], !,
-        sunify(D,DR with A2,C),
-        append(C,R1,R3),
-        sat_step([ran(SR,DR),rel(SR),set(DR)|R3],R2,_,F).
+	nonvar(S), S = SR with [_A1,A2], !,
+	sunify(D,DR with A2,C),
+	append(C,R1,R3),
+	sat_step([ran(SR,DR),rel(SR),set(DR)|R3],R2,_,F).
 
 sat_ran_cp([ran(S,D)|R1],R2,c,F) :-
 	sat_step([inv(S,SInv),dom(SInv,D)|R1],R2,_,F).
@@ -5573,13 +5572,13 @@ sat_comp([comp(S1,S2,T)|R1],R2,R,F) :-   % comp(r,s,t) and either r or s or t ar
 	sat_comp_cp([comp(SS1,SS2,TT)|R1],R2,R,F).
 
 sat_comp([comp(R,S,T)|R1],R2,c,F) :-      % comp({[X,Y]/R},{[A,B]/S},{})
-        nonvar(R), R = RR with [X,Y],
-        nonvar(S), S = SS with [A,B],
-        nonvar(T), is_empty(T), !,
-        sat_step([A neq Y,
-                  comp({} with [X,Y],SS,{}),
-                  comp(RR,{} with [A,B],{}),
-                  comp(RR,SS,{}) | R1],R2,_,F).
+	nonvar(R), R = RR with [X,Y],
+	nonvar(S), S = SS with [A,B],
+	nonvar(T), is_empty(T), !,
+	sat_step([A neq Y,
+	          comp({} with [X,Y],SS,{}),
+	          comp(RR,{} with [A,B],{}),
+	          comp(RR,SS,{}) | R1],R2,_,F).
 sat_comp([comp(R,S,T)|R1],R2,c,F) :-      % comp({[X,Y]},{[Z,V]},T) - R,S singleton relations
 	nonvar(R), R = RR with [X,Y1], nonvar(RR), is_empty(RR),
 	nonvar(S), S = SS with [Y2,Z], nonvar(SS), is_empty(SS), !,
@@ -5742,44 +5741,41 @@ sat_comppf([comppf(R,S,T)|R1],[comppf(R,S,T)|R2],Stop,F) :-
 	sat_step(R1,R2,Stop,F).
                                          % comppf({[X,Y]/R},{[A,B]/S},{})
 sat_comppf([comppf(R,S,T)|R1],R2,c,F) :-
-        nonvar(R), R = RR with [X,Y],
-        nonvar(S), S = SS with [A,B],
-        nonvar(T),is_empty(T), !,
-        sat_step([A neq Y,
-                  comppf({} with [X,Y],SS,{}),
-                  comppf(RR,{} with [A,B],{}),
-                  comppf(RR,SS,{}) | R1],R2,_,F).
+	nonvar(R), R = RR with [X,Y],
+	nonvar(S), S = SS with [A,B],
+	nonvar(T),is_empty(T), !,
+	sat_step([A neq Y,
+	          comppf({} with [X,Y],SS,{}),
+	          comppf(RR,{} with [A,B],{}),
+	          comppf(RR,SS,{}) | R1],R2,_,F).
                                          % comppf({[X,Y]},{[Z,V]},T)
 sat_comppf([comppf(R,S,T)|R1],R2,c,F) :-
-        nonvar(R), R = RR with [X,Y1], nonvar(RR), is_empty(RR),
-        nonvar(S), S = SS with [Y2,Z], nonvar(SS), is_empty(SS), !,
-        (sat_step([Y1 = Y2, T = {} with [X,Z] | R1],R2,_,F)
-         ;
-         sat_step([Y1 neq Y2, T = {} |R1],R2,_,F)
-        ).
+	nonvar(R), R = RR with [X,Y1], nonvar(RR), is_empty(RR),
+	nonvar(S), S = SS with [Y2,Z], nonvar(SS), is_empty(SS), !,
+	(	sat_step([Y1 = Y2, T = {} with [X,Z] | R1],R2,_,F)
+	;	sat_step([Y1 neq Y2, T = {} |R1],R2,_,F)
+	).
                                          % comppf({[X,Y]/R},{[Y,Z]/S},{[X,Z]/T})
 sat_comppf([comppf(R,S,T)|R1],R2,c,F) :-
-        nonvar(T), T = TT with [X,Z], !,
-        sat_step([R = RR with [X,Y], S = SS with [Y,Z],
-                  [X,Y] nin RR, [Y,Z] nin SS,
-                  comppf(RR,{} with [Y,Z],N1),comppf(RR,SS,N2),
-                  un(N1,N2,TT) | R1],R2,_,F).
-                                         % comppf({[X,Y],...},{...},T), T var.
+	nonvar(T), T = TT with [X,Z], !,
+	sat_step([R = RR with [X,Y], S = SS with [Y,Z],
+	          [X,Y] nin RR, [Y,Z] nin SS,
+	          comppf(RR,{} with [Y,Z],N1),comppf(RR,SS,N2),
+	          un(N1,N2,TT) | R1],R2,_,F).
+	                                 % comppf({[X,Y],...},{...},T), T var.
 sat_comppf([comppf(R,S,T)|R1],R2,c,F) :-
-        var(T),
-        nonvar(R), R = RR with [X,Y],!,
-       (
-         sunify(S,SS with [Y,Z],C2),     % Y in dom S
-         append(C2,R1,R3),
-         sat_step([[Y,Z] nin SS,
-                  comppf(RR,{} with [Y,Z],N1),
-                  comppf(RR,SS,N2),
-                  un(N1,N2,TT),
-                  T = TT with [X,Z] | R3],R2,_,F)
-       ;
-        sat_step([comppf({[Y,Y]},S,{}),  % Y nin dom S
-                  comppf(RR,S,T) | R1],R2,_,F)
-       ).
+	var(T),
+	nonvar(R), R = RR with [X,Y],!,
+	(	sunify(S,SS with [Y,Z],C2),     % Y in dom S
+		append(C2,R1,R3),
+		sat_step([[Y,Z] nin SS,
+		         comppf(RR,{} with [Y,Z],N1),
+		         comppf(RR,SS,N2),
+		         un(N1,N2,TT),
+		         T = TT with [X,Z] | R3],R2,_,F)
+	;	sat_step([comppf({[Y,Y]},S,{}),  % Y nin dom S
+		comppf(RR,S,T) | R1],R2,_,F)
+	).
 
 
 %%%%%%%%%%%%%%%%%%%%%% identity for partial functions (id/2)
@@ -5861,15 +5857,15 @@ sat_id_cp([id(A,S)|R1],R2,c,F) :-                  % id(cp(...),{...})
 	sat_step([X nin AR,[X,Y] nin SR,id(AR,SR),set(AR),rel(SR)|R4],R2,_,F).
 
 sat_id_cp([id(A,S)|R1],R2,c,F) :-                  % id(cp(...),S), var(S)
-        var(S),!,
-        nonvar(A), A = cp(S1,S2),
-        S1 = Xr with X, S2 = Yr with Y,
-        %write('id(cp(...),S)'),nl,
-        sunify(S,N1 with [[X,Y],[X,Y]],C), append(C,R1,R3),
-        sat_step([id(N2,N1),
-                  [[X,Y],[X,Y]] nin N1,
-                  delay(un(cp({} with X,Yr),cp(Xr,Yr with Y),N2),false),
-                  rel(N1),set(N2) |R3],R2,_,F).
+	var(S),!,
+	nonvar(A), A = cp(S1,S2),
+	S1 = Xr with X, S2 = Yr with Y,
+	%write('id(cp(...),S)'),nl,
+	sunify(S,N1 with [[X,Y],[X,Y]],C), append(C,R1,R3),
+	sat_step([id(N2,N1),
+	          [[X,Y],[X,Y]] nin N1,
+	          delay(un(cp({} with X,Yr),cp(Xr,Yr with Y),N2),false),
+	          rel(N1),set(N2) |R3],R2,_,F).
 
 sat_id_cp([id(A,S)|R1],R2,c,F) :-                  % id(a,cp(...))
 	nonvar(S), S = cp(Xr,Yr),!,
@@ -5899,7 +5895,7 @@ sat_dres([dres(A,R,S)|R1],R2,c,F) :-              % dres(A,R,S)
         |R1],R2,_,F).
 
 sat_drespf([drespf(A,R,S)|R1],R2,c,F) :-          % drespf(A,R,S) -  only for partial functions
-        sat_step([dom(R,DR),set(DR),inters(A,DR,I),subset(S,R),dom(S,I)|R1],R2,_,F).
+	sat_step([dom(R,DR),set(DR),inters(A,DR,I),subset(S,R),dom(S,I)|R1],R2,_,F).
 
 novar3(A,_R,_S) :- nonvar(A),!.
 novar3(_A,R,_S) :- nonvar(R),!.
@@ -5929,8 +5925,8 @@ sat_rares([rares(R,A,S)|R1],R2,Stop,nf) :-       % rares(R,A,S), A,R,S variables
 	var(A), var(R), var(S), !,
 	sat_step([delay(rares(R,A,S),prolog_call(novar3(A,R,S))) | R1],R2,Stop,nf).
 sat_rares([rares(R,A,S)|R1],R2,c,F) :-            % rares(R,A,S)
-        sat_step([un(S,T,R),rel(T),ran(S,B),set(B),ran(T,C),set(C),subset(C,A),disj(A,B)
-        |R1],R2,_,F).
+	sat_step([un(S,T,R),rel(T),ran(S,B),set(B),ran(T,C),set(C),subset(C,A),disj(A,B)
+		|R1],R2,_,F).
 
 %%%%%%%%%%%%%%%%%%%%%% partial function application (apply/3)
 
@@ -5957,10 +5953,9 @@ sat_nrel([nrel(X)|R1],R2,c,F) :-                  % nrel(X)
 %         var(X),!,                               % (--> Level 3)
 %         sat_step(R1,R2,Stop,nf).
 sat_npfun([npfun(X)|R1],R2,c,F) :-                % npfun(X)
-        (sat_step([set(X), [N1,N2] in X, [N1,N3] in X, N2 neq N3 |R1],R2,_,F)
-         ;
-         sat_step([set(X), nrel(X) |R1],R2,_,F)
-        ).
+	(	sat_step([set(X), [N1,N2] in X, [N1,N3] in X, N2 neq N3 |R1],R2,_,F)
+	;	sat_step([set(X), nrel(X) |R1],R2,_,F)
+	).
 
 %%%%%%%%%%%%%%%%%%%%%% not pair (npair/1)
 
@@ -5985,23 +5980,20 @@ sat_npair([npair(X)|R1],R2,c,F) :-                % npair([a,b,c,...])
 %%%%%%%%%%%%%%%%%%%%%% not domain (ndom/2)
 
 sat_ndom([ndom(R,A)|R1],R2,c,F) :-                % ndom(R,A)
-        (sat_step([[N1,_N2] in R, N1 nin A |R1],R2,_,F)
-         ;
-         sat_step([N1 in A, comp({} with [N1,N1],R,{}) |R1],R2,_,F)
-%         sat_step([N1 in A, dom(R,D), N1 nin D, set(D)|R1],R2,_,F)    %alternative implementation
-         ;
-         sat_step([nrel(R)|R1],R2,_,F)
-        ).
+	(	sat_step([[N1,_N2] in R, N1 nin A |R1],R2,_,F)
+	;	sat_step([N1 in A, comp({} with [N1,N1],R,{}) |R1],R2,_,F)
+%	;	sat_step([N1 in A, dom(R,D), N1 nin D, set(D)|R1],R2,_,F)    %alternative implementation
+	;	sat_step([nrel(R)|R1],R2,_,F)
+	).
 
 %%%%%%%%%%%%%%%%%%%%%% not inverse (ninv/2)
 
 sat_ninv([ninv(R,S)|R1],R2,c,F) :-                % ninv(R,R)
-         var(R),var(S),R == S,!,
-         (sat_step([[N1,N2] in R, [N2,N1] nin R|R1],R2,_,F)
-%         (sat_step([R = N with [N1,N2], [N2,N1] nin N, N1 neq N2|R1],R2,_,F)  %alternative implementation
-          ;
-          sat_step([nrel(R)|R1],R2,_,F)
-         ).
+	var(R),var(S),R == S,!,
+	(	sat_step([[N1,N2] in R, [N2,N1] nin R|R1],R2,_,F)
+%	(	sat_step([R = N with [N1,N2], [N2,N1] nin N, N1 neq N2|R1],R2,_,F)  %alternative implementation
+	;	sat_step([nrel(R)|R1],R2,_,F)
+	).
 sat_ninv([ninv(R,S)|R1],R2,c,F) :-                % ninv(R,S)
 	(	sat_step([[N1,N2] in R, [N2,N1] nin S|R1],R2,_,F)
 	;	sat_step([[N1,N2] nin R, [N2,N1] in S|R1],R2,_,F)
@@ -6012,30 +6004,24 @@ sat_ninv([ninv(R,S)|R1],R2,c,F) :-                % ninv(R,S)
 %%%%%%%%%%%%%%%%%%%%%% not composition (ncomp/3)
 
 sat_ncomp([ncomp(R,S,T)|R1],R2,c,F) :-            % ncomp(R,S,T)
-        (sat_step([[X,Y] in R, [Y,Z] in S, [X,Z] nin T|R1],R2,_,F)
-         ;
-         sat_step([[X,Z] in T,
-                   comp({} with [X,X],R,N1),
-                   comp(S,{} with [Z,Z],N2),
-                   comp(N1,N2,{}) |R1],R2,_,F)
-         ;
-         sat_step([nrel(R)|R1],R2,_,F)
-         ;
-         sat_step([nrel(S)|R1],R2,_,F)
-         ;
-         sat_step([nrel(T)|R1],R2,_,F)
-         ).
+	(	sat_step([[X,Y] in R, [Y,Z] in S, [X,Z] nin T|R1],R2,_,F)
+	;	sat_step([[X,Z] in T,
+		      comp({} with [X,X],R,N1),
+		      comp(S,{} with [Z,Z],N2),
+		      comp(N1,N2,{}) |R1],R2,_,F)
+	;	sat_step([nrel(R)|R1],R2,_,F)
+	;	sat_step([nrel(S)|R1],R2,_,F)
+	;	sat_step([nrel(T)|R1],R2,_,F)
+	).
 
 %%%%%%%%%%%%%%%%%%%%%% not range (nran/2)
 
 sat_nran([nran(R,A)|R1],R2,c,F) :-                % nran(R,A)
-        (sat_step([[_N1,N2] in R, N2 nin A|R1],R2,_,F)
-         ;
-         sat_step([N1 in A, comp(R,{} with [N1,N1],{})|R1],R2,_,F)
-%         sat_step([ran(R,RR), N2 nin RR, N2 in A, set(RR) |R1],R2,_,F)   %alternative implementation
-         ;
-         sat_step([nrel(R)|R1],R2,_,F)
-        ).
+	(	sat_step([[_N1,N2] in R, N2 nin A|R1],R2,_,F)
+	;	sat_step([N1 in A, comp(R,{} with [N1,N1],{})|R1],R2,_,F)
+%	;	sat_step([ran(R,RR), N2 nin RR, N2 in A, set(RR) |R1],R2,_,F)   %alternative implementation
+	;	sat_step([nrel(R)|R1],R2,_,F)
+	).
 
 %%%%%%%%%%%%%%%%%%%%%% not domain restriction (ndres/3)
 
