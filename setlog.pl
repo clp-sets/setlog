@@ -1,4 +1,4 @@
-﻿
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
 %%                The {log} interpreter and solver
@@ -1046,8 +1046,7 @@ cond_retract(C) :-
 cond_retract(_).
 
 retract_trace :-
-	retractall(trace(_)),!.
-retract_trace.
+	retractall(trace(_)).
 
 
 %%%% constrlist(+Atom_conj,-Constraint_list,-Constraint/Non_Constraint_list)
