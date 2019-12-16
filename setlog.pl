@@ -132,7 +132,7 @@ set_default_control :-
 
 top_level :-
 	cond_retract(final),          %restore default value: no final
-	nl, write('{log}=> '), %flush_output(),
+	nl, write('{log}=> '),
 	setlog_read_term(Goal,[variable_names(VarNames)]),            %e.g. VarNames=[X=_1,S=_2,Y=_3,R=_4]
 	solve(Goal,Constr),
 	skip_return,
@@ -166,8 +166,7 @@ setlog_read_term(Goal,Vars) :-
 	catch(read_term(Goal,Vars),Msg,syntax_error_msg(Msg)).
 
 syntax_error_msg(Text) :-
-	write('Syntax error:'), nl,
-	write(Text), nl,
+	write('Syntax error:'), nl, write(Text), nl,
 	fail.
 
 skip_return :-
@@ -1038,9 +1037,13 @@ ssolve(subset_elim,[],[]) :- !,
 	assertz(subset_elim).
 
 ssolve(A,C,D) :-                   %% program defined predicates
-	our_clause(A,B,C1),
+	our_clause(A,B,C1),!,
 	constrlist(B,C2,D),
 	append(C1,C2,C).
+ssolve(A,_C,_D):-
+       functor(A,Pname,N),
+       write('ERROR: Undefined procedure: '), write(Pname), write('/'), write(N),nl,
+       fail.
 
 our_clause(A,B,C) :-
 	functor(A,Pname,N),
@@ -1209,6 +1212,8 @@ negate(rimg(A,B,C),nrimg(A,B,C)) :- !.
 negate(nrimg(A,B,C),rimg(A,B,C)) :- !.
 negate(oplus(A,B,C),noplus(A,B,C)) :- !.
 negate(noplus(A,B,C),oplus(A,B,C)) :- !.
+negate(foreach(D,P,F,FP),nforeach(D,P,F,FP)) :- !.
+negate(nforeach(D,P,F,FP),foreach(D,P,F,FP)) :- !.
 
 negate((B1 & B2),(NB1 or NB2)) :- !,
 	negate(B1,NB1),
@@ -1477,7 +1482,7 @@ setlog_open(File,Mode,Stream) :-
 	catch(open(FullName,Mode,Stream),Msg,existence_error_msg(Msg)).
 
 existence_error_msg(Text) :-
-	write('Existence error:'), nl,
+	write('Existence error:'),
 	write('file '), write(Text), write(' does not exist'), nl,
 	fail.
 
@@ -1571,8 +1576,7 @@ tmp_switch_ctxt(OldCtxt) :-
 	assertz(context(NewCtxt)).
 
 syntax_error_cont_msg(Text) :-
-	write('Syntax error:'), nl,
-	write(Text), nl.
+	write('Syntax error:'), nl, write(Text), nl.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3766,7 +3770,7 @@ sat_sub([subset(S1,S2)|R1],R2,c,F) :-                % special rule for RIS-RUQ
 	mk_atomic_constraint(PreFlNew,FlNewD),
 	mk_atomic_constraint(PPNew,PPNewD),
 	T = Z,
-	sat_step([FlNewD,PPNewD,subset(A,ris(CtrlExpr in A,[],Fl,CtrlExpr,PP))|R1],R2,_,F).
+	sat_step([FlNewD,PPNewD,subset(A,ris(CtrlExpr in A,V,Fl,CtrlExpr,PP))|R1],R2,_,F).
 sat_sub([subset(S1,S2)|R1],R2,c,F) :-                % subset(s,ris(...)), s any term (including RIS)
 	ris_term(S2),
 	sat_step([un(S1,S2,S2)|R1],R2,_,F).
@@ -5557,10 +5561,11 @@ sat_ran([ran(S,D)|R1],R2,c,F) :-                   % ran({[...],...},R) or ran({
 	nonvar(S), S = SR with [_A1,A2], noran_elim,!,
 	sunify(D,DR with A2,C),
 	append(C,R1,R3),
-	(	var(SR),nonvar(DR), DR=_ with _ ->
-		sat_step([solved(ran(SR,DR),var(SR),[],f),rel(SR),set(DR)|R3],R2,_,F)
-	;	sat_step([ran(SR,DR),rel(SR),set(DR)|R3],R2,_,F)
-	).
+        (var(SR),nonvar(DR), DR=_ with _,!,                      
+         sat_step([solved(ran(SR,DR),var(SR),[],f),rel(SR),set(DR)|R3],R2,_,F)
+         ;
+         sat_step([ran(SR,DR),rel(SR),set(DR)|R3],R2,_,F)                 
+        ).
 sat_ran([ran(S,D)|R1],R2,c,F) :-                   % ran(S,{t})
 	var(S), nonvar(D), D = E with A, nonvar(E), is_empty(E), !,
 	sat_step([comp(R,{} with [A,A],R),S = R with [Z,A],[Z,A] nin R,rel(R)|R1],R2,_,F).
@@ -7529,29 +7534,30 @@ ris_preproc(RisE,{},[]) :-
 	is_ris(RisE,ris(CE_Dom,_V,_F,_P,_PP)),
 	nonvar(CE_Dom), CE_Dom = (_CtrlExpr in Dom),
 	nonvar(Dom),is_empty(Dom),!.
-ris_preproc(RisE,ris(New_CE_Dom,V,New_Fl,New_P,New_PP),C) :-
-	is_ris(RisE,ris(CE_Dom,V,Fl,P,PP)),
-	preproc(CE_Dom,New_CE_Dom,C1),
-	preproc(Fl,New_Fl,C2),
-	preproc(P,New_P,C3),
-	preproc(PP,Aux_PP,C4),
-	check_ris(ris(New_CE_Dom,V,New_Fl,New_P,Aux_PP)),
-	append(C1,C2,C12), append(C12,C3,C0),
-	CE_Dom = (CtrlExpr in _Dom),
-	ctrl_expr(CtrlExpr,V,LV,_CtrlExprNew),
-	separate_sortc_LV(C0,LV,C,LC),
-	append(LC,C4,LC_C4),
-	norep_in_list(LC_C4,Local_sortc),
-
-	%write('***LV***'),write(LV),nl,
-	%write('***C***'),write(C),nl,
-	%write('***Local_sortc***'),write(Local_sortc),nl,
-
-	list_to_conj(Sort_PP,Local_sortc),
-	conj_append(Aux_PP,Sort_PP,New_PP).
-ris_preproc(_,_,_) :-
+ris_preproc(RisE,ris(New_CE_Dom,V,New_Fl,New_P,New_PP),C) :- 
+        ris_preproc_gen(RisE,ris(New_CE_Dom,V,New_Fl,New_P,New_PP),C),!.    ris_preproc(_,_,_) :-
 	msg_sort_error(ris),
 	fail.
+ris_preproc_gen(RisE,ris(New_CE_Dom,V,New_Fl,New_P,New_PP),C) :-
+        is_ris(RisE,ris(CE_Dom,V,Fl,P,PP)),
+        preproc(CE_Dom,New_CE_Dom,C1),
+        preproc(Fl,New_Fl,C2),
+        preproc(P,New_P,C3),
+        preproc(PP,Aux_PP,C4),
+        check_ris(ris(New_CE_Dom,V,New_Fl,New_P,Aux_PP)),  
+        append(C1,C2,C12), append(C12,C3,C0),
+        CE_Dom = (CtrlExpr in _Dom),
+        ctrl_expr(CtrlExpr,V,LV,_CtrlExprNew),
+        separate_sortc_LV(C0,LV,C,LC),
+        append(LC,C4,LC_C4),  
+        norep_in_list(LC_C4,Local_sortc),
+
+        %write('***LV***'),write(LV),nl,
+        %write('***C***'),write(C),nl,
+        %write('***Local_sortc***'),write(Local_sortc),nl,
+
+        list_to_conj(Sort_PP,Local_sortc),
+        conj_append(Aux_PP,Sort_PP,New_PP).
 
 is_ris(ris(CE_Dom,Fl),RisTerm) :-                                     % ris/2 --> ris/5 (no parms)
 	nonvar(CE_Dom), CE_Dom = (CtrlExpr in _),
@@ -7599,16 +7605,16 @@ ndisj([_X|R],L) :-
 	ndisj(R,L).
 
 is_foreach(foreach(D,Fo),foreach(D1,[],Fo1,true),C) :-     %foreach/2 ---> foreach/4
-	ris_preproc(ris(D,Fo),ris(D1,_LV,Fo1,_P,_PP),C),!.
+	ris_preproc_gen(ris(D,Fo),ris(D1,_LV,Fo1,_P,_PP),C),!.
 is_foreach(foreach(D,P,Fo,FP),foreach(D1,P,Fo1,FP1),C) :-
 	nonvar(D), D = (V in _Dom),
-	ris_preproc(ris(D,P,Fo,V,FP),ris(D1,_P,Fo1,_V,FP1),C).
+	ris_preproc_gen(ris(D,P,Fo,V,FP),ris(D1,_P,Fo1,_V,FP1),C).
 
 is_nforeach(nforeach(D,Fo),nforeach(D1,[],Fo1,true),C) :-  %nforeach/2 ---> nforeach/4
-	ris_preproc(ris(D,Fo),ris(D1,_LV,Fo1,_P,_PP),C),!.
+	ris_preproc_gen(ris(D,Fo),ris(D1,_LV,Fo1,_P,_PP),C),!.
 is_nforeach(nforeach(D,P,Fo,FP),nforeach(D1,P,Fo1,FP1),C) :-
 	nonvar(D), D = (V in _Dom),
-	ris_preproc(ris(D,P,Fo,V,FP),ris(D1,_P,Fo1,_V,FP1),C).
+	ris_preproc_gen(ris(D,P,Fo,V,FP),ris(D1,_P,Fo1,_V,FP1),C).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% cp preprocessing
@@ -7740,15 +7746,15 @@ is_ker(T) :-
 	).
 
 msg_sort_error(set) :-
-	write(' wrong set term '), nl.
+	write('ERROR: wrong set term '), nl.
 msg_sort_error(int) :-
-	write(' wrong interval term '), nl.
+	write('ERROR: wrong interval term '), nl.
 msg_sort_error(bag) :-
-	write(' wrong multiset term '), nl.
+	write('ERROR: wrong multiset term '), nl.
 msg_sort_error(cp) :-
-	write(' wrong cp term '), nl.
+	write('ERROR: wrong cp term '), nl.
 msg_sort_error(ris) :-
-	write(' wrong ris term '), nl.
+	write('ERROR: wrong ris term '), nl.
 
 
 
@@ -7851,7 +7857,7 @@ sf_find([A|R],[A|S],List) :-
 
 check_control_var1(Vars,Finalvars) :-
 	Vars == Finalvars, !,
-	write('ERROR - Formula of a set former must'),
+	write('ERROR: Formula of a set former must'),
 	write(' contain the set former control variable'), nl,
 	fail.
 check_control_var1(_Vars,_Finalvars).
@@ -7874,7 +7880,7 @@ is_sf(Int,X,Phi) :-
 
 check_control_var2(X) :-
 	nonvar(X), !,
-	write('ERROR - Control variable in a set former'),
+	write('ERROR: Control variable in a set former'),
 	write(' must be a variable term!'), nl,
 	fail.
 check_control_var2(_X).
@@ -7931,7 +7937,7 @@ ruq_in_goal(delay(A,G),delay(A1,G1),_,RR) :-
 ruq_in_goal(forall(X in _S,_Y),_,_,_) :-
 	nonvar(X),
 	!,
-	write('ERROR - Control variable in a R.U.Q. must be a variable term!'), nl,
+	write('ERROR: Control variable in a R.U.Q. must be a variable term!'), nl,
 	fail.
 ruq_in_goal(forall(X in S,G),NewG,_,_) :-
 	!,
@@ -7960,7 +7966,7 @@ ruq_in_goal(A,A,_,_).
 
 check_control_var_RUQ(Vars,Finalvars) :-
 	Vars == Finalvars, !,
-	write('ERROR - Formula of a R.U.Q. must'),
+	write('ERROR: Formula of a R.U.Q. must'),
 	write(' contain the R.U.Q. control variable'), nl,
 	fail.
 check_control_var_RUQ(_Vars,_Finalvars).
@@ -8420,7 +8426,7 @@ open_intv(S) :-
 
 nonopen_intv(S) :-
 	open_intv(S),!,
-	write('ERROR - Interval bounds are not sufficiently instantiated'),nl,
+	write('ERROR: Interval bounds are not sufficiently instantiated'),nl,
 	fail.
 nonopen_intv(_S).
 
