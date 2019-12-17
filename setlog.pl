@@ -917,6 +917,7 @@ sat_or_solve(A,Clist_in,Clist_out,Alist_out,_) :-
 %%%% ssolve(+Atom,-Constraint,-Non_Constraint)
 %
 ssolve(true,[],[]) :- !.                  %% unit goal
+ssolve(false,[],[]):- !, fail.
 
 ssolve(neg A,ClistNew,[]) :-              %% simplified constructive negation
 	!,c_negate(A,ClistNew).
@@ -1037,12 +1038,14 @@ ssolve(subset_elim,[],[]) :- !,
 	assertz(subset_elim).
 
 ssolve(A,C,D) :-                   %% program defined predicates
-	our_clause(A,B,C1),!,
+	our_clause(A,B,C1),
 	constrlist(B,C2,D),
 	append(C1,C2,C).
-ssolve(A,_C,_D):-
+ssolve(A,_C,_D):-             %NEW.17.12
        functor(A,Pname,N),
-       write('ERROR: Undefined procedure: '), write(Pname), write('/'), write(N),nl,
+       functor(P,Pname,N),
+       \+isetlog((P :- _B),_),
+       write('ERROR: Undefined procedure: '), write(Pname), write('/'), write(N),
        fail.
 
 our_clause(A,B,C) :-
