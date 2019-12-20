@@ -1,37 +1,4 @@
 
-%%%%%%%% ATTN per versione setlog483 commentare le replace_rule br4, br5, br6
-
-% Version 1.2-12
-
-%release 0 
-% - aggiunte alcune inference rules per vincoli insiemistici
-%release 1 
-% - aggiunte replace rules per dom/comp e pfun
-%release 2 
-% - aggiunte replace rules per drespf
-%release 3 
-% - aggiunte replace rules per inv-dom e inv-ran
-%release 4 
-% - modificate replace rules per inv-dom e inv-ran
-%release 5
-% - aggiunte replace rule per 'un' su cp 
-%release 6
-% - aggiunta replace rule per 'subset' su cp 
-%release 7 
-% - aggiunta replace rule per comp(R,S,T) e pfun(R) & pfun(S)
-%release 8 
-% - eliminata replace rule per comp(R,S,T) e pfun(T)
-% - aggiunto pfun(Q) a constraint generato da regola br5
-%release 9
-% - aggiunta inference rule su numeri interi per espressioni del tipo X is Y + k
-%release 10
-% - corretto bug in inference_rule 'un-disj'
-%release 11
-% - eliminate regole br7, br7bis, br8 e br8bis
-%release 12
-% -aggiunta replace_rule r4 per ttrattamento caso A neq B & set(A) & set(B) 
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % User-defined "filtering" rules
