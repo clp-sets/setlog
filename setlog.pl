@@ -2521,7 +2521,7 @@ sat_eq_cp([T1 = T2|R1],R2,c,F) :-              % X = cp(...) --> cp(...) = X
     %write(rule(inverti_X_cp)),nl,
     sat_eq_cp([T2 = T1|R1],R2,_,F).
 sat_eq_cp([T1 = T2|R1],R2,c,F) :-              % t = cp(...) --> cp(...) = t   (t not cp-term)
-    nonvar(T1), \+(T1 = cp(_,_)),!,
+    nonvar(T1), T1 \= cp(_,_), !,
     %write(rule(inverti_ncp_cp)),nl,
     sat_eq_cp([T2 = T1|R1],R2,_,F).
 
@@ -3636,7 +3636,7 @@ sat_nin([T nin A|_R1],_R2,c,_F) :-           % t nin {...,t,...} --> false
     set_member_strong(T,A),!,
     fail.
 sat_nin([T nin A|R1],R2,c,F) :-              % ground set/multiset/list/interval:
-    ground(T), ground(A), \+(A = cp(_,_)),!, % t nin {A|R} or t nin +{A|R} or t nin [A|R] or t nin int(a,b)
+    ground(T), ground(A), A \= cp(_,_), !, % t nin {A|R} or t nin +{A|R} or t nin [A|R] or t nin int(a,b)
     \+ g_member(T,A),
     sat_step(R1,R2,_,F).
 sat_nin([T nin A|R1],R2,c,F) :-              % t nin X, t[X]
@@ -7252,10 +7252,10 @@ first_int((I) \/ (In),I0,(IRest) \/ (In)) :-     % 'Int' is a disj. of intervals
 
 add_FDc([],[],_) :- !.
 add_FDc([C|SETc],[C|FDc],Warning) :-
-    \+ (C = integer(_)),!,
+    C \= integer(_), !,
     add_FDc(SETc,FDc,Warning).
 add_FDc([integer(X)|SETc],[integer(X)|FDc],Warning) :-
-    \+ is_fd_var(X),!,
+    \+ is_fd_var(X), !,
     add_FDc(SETc,FDc,Warning).
 add_FDc([integer(X)|SETc],FDc,Warning) :-
     get_domain(X,FD),
