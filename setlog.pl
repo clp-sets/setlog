@@ -519,6 +519,18 @@ setlog(Goal,TimeOut,OutConstrLst,Res) :-
     setlog5_opts(Opts_list),
     setlog(Goal,TimeOut,OutConstrLst,Res,Opts_list).
 
+%%%% rsetlog/5: same as setlog/5 with reification on Res
+%%%% rsetlog(+Goal,+TimeOut,-OutConstraintList,-Res,+Options) 
+%%%% (Res = success | time_out | maybe | failure)
+%
+rsetlog(Goal,TimeOut,OutConstrLst,Res,Options) :-   
+	set_default,
+                   nb_setval(sol,no),
+	setlog1(Goal,TimeOut,OutConstrLst,Res,Options),
+                   nb_setval(sol,yes).
+rsetlog(_Goal,_TimeOut,_OutConstrLst,failure,_Options) :-
+                   nb_getval(sol,no).
+
 %%%% setlog_InOut(+Goal,+InConstraintList,-OutConstraintList)
 %
 setlog_InOut(Goal,InConstrLst,OutConstrLst) :-
