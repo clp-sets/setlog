@@ -38,6 +38,7 @@
     setlog/3,
     setlog/4,
     setlog/5,
+	rsetlog/5,
     setlog_InOut/3,
     setlog_InOut_partial/3,
     setlog_InOut_SC/3,
