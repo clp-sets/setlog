@@ -1,0 +1,239 @@
+tba(X,Y,Z,T) :-
+  inters(X,Y,M1) 
+  & inters(Y,Z,M2) 
+  & inters(Z,X,M3) 
+  & un(M2,M3,M4) 
+  & un(M1,M4,T).
+
+pixley(X,Y,Z,U,T) :-
+  un(Y,M1,U)
+  & disj(Y,M1)
+  & subset(X,U)
+  & subset(Z,U)
+  & inters(X,M1,M2)
+  & inters(X,Z,M3)
+  & inters(M1,Z,M4)
+  & un(M3,M4,M5)
+  & un(M2,M5,T).
+
+pixleyd(X,Y,Z,U,T) :-
+  un(Y,M1,U)
+  & disj(Y,M1)
+  & subset(X,U)
+  & subset(Z,U)
+  & un(X,M1,M2)
+  & un(X,Z,M3)
+  & un(M1,Z,M4)
+  & inters(M3,M4,M5)
+  & inters(M2,M5,T).
+
+nand(X,Y,U,Z) :-
+  subset(X,U)
+  & subset(Y,U) 
+  & inters(X,Y,M1) 
+  & diff(U,M1,Z).
+
+nandb(X,Y,Z) :-
+  inters(X,Y,M1)
+  & un(M1,Z,{{}}) 
+  & disj(M1,Z).
+
+vec(R,B) :-
+  R = cp(M1,B).
+
+nvec(R,B) :-
+  rel(R)
+  & set(B)
+  & [M1,_] in R 
+  & M2 in B 
+  & [M1,M2] nin R.
+
+% other definitions for nvec
+%
+% nvec(R,B) <=> [M1,_] in R & comp({[M1,M1]},R,M2) & nran(M2,B)
+%
+% nvec(R,B) <=> [M1,_] in R & comp({[M1,M1]},R,M2) & M2 neq cp({M1},B)
+%
+% nvec(R,B) <=> 
+%   [M1,_] in R & comp({[M1,M1]},R,M2) & M3 in B & [M1,M3] nin R
+
+sop([X,Y],{{X},{X,{Y}}}) :-
+ nset(X) & nset(Y).
+
+% restrict(R,X,Y,RR) :- inters(R,cp(X,Y),RR).
+restrict(R,X,Y,RR) :- 
+  dres(X,R,M) & rres(M,Y,RR).
+
+% nrestrict(R,X,Y,RR) :- ninters(R,cp(X,Y),RR).
+nrestrict(R,X,Y,RR) :- 
+  dres(X,R,M) & nrres(M,Y,RR).
+
+range(R,X,U2,Y) :-
+  restrict(R,{X},U2,M1) 
+  & [M2,Y] in M1.
+
+domain(R,U1,Y,X) :-
+  restrict(R,U1,{Y},M1)
+  & [X,M2] in M1.
+
+bij(F) :-
+  pfun(F) 
+  & inv(F,M1)
+  & pfun(M1).
+
+nbij(F) :-
+  npfun(F) or (inv(F,M1) & npfun(M1)).
+
+diagonalize(R,U,S) :-
+  id(U,M1) 
+  & dom(M2,M3)
+  & un(M3,S,U)
+  & disj(M3,S)
+  & inters(R,M1,M2).
+
+first(S,X) :-
+      S = {{M1},{M1,{M2}}} &
+     %   nset(M1) & nset(M2) &
+      X = {M1}.
+first(S,X) :-
+     nonvar(S) &
+     naf S = {{M1},{M1,{M2}}} &
+     X = S.
+
+second(S,X) :-
+      S = {{M1},{M1,{M2}}} &
+     %   nset(M1) & nset(M2) &
+      X = {M2}.
+second(S,X) :-
+     nonvar(S) &
+     naf S = {{M1},{M1,{M2}}} &
+     X = S.
+
+first1(S,X) :- 
+  S = {{M1},{M1,{M2}}} 
+  & nset(M1) 
+  & nset(M2) 
+  & X = {M1}.
+
+second1(S,X) :- 
+  S = {{M1},{M1,{M2}}} 
+  & nset(M1) 
+  & nset(M2)  
+  & X = {M1,{M2}}.
+
+compatible(F,G,H) :-
+  pfun(F)
+  & dom(G,M1) 
+  & dom(M1,M2)
+  & dom(F,M2)
+  & ran(F,M3)
+  & dom(H,M4)
+  & dom(M4,M5)
+  & subset(M3,M5).
+
+operation(F) :-
+  pfun(F)
+  & dom(F,cp(M1,M1)) 
+  & ran(F,M2)
+  & subset(M2,M1).
+
+symdiff(A,B,C) :-
+  diff(A,B,M1)
+  & diff(B,A,M2)
+  & un(M1,M2,C).
+
+% F is a total bijective function
+t1to1(F,A,B) :-
+  pfun(F)
+  & dom(F,A)
+  & ran(F,B)
+  & inv(F,M1)
+  & pfun(M1).
+
+%invimg(F,B,A) :-
+%  rres(F,B,M1) 
+%  & dom(M1,A).
+
+invimg(F,B,A) :-
+  id(B,M1) 
+  & comp(F,M1,M2) 
+  & dom(M2,A).
+
+equivalence(R,E) :-
+  subset(R,cp(E,E)) 
+  & comp(R,R,M1) 
+  & subset(M1,R)  
+  & id(E,M2) 
+  & subset(M2,R) 
+  & inv(R,R).
+
+eclass(R,E,A,C) :-
+%  inters(R,cp({A},E),M1) 
+%  & ran(M1,C).
+%
+%  inters(R,cp({A},E),cp({A},C)).
+%
+%  rimg(R,{A},C). 
+  rimg2(R,{A},C). 
+
+fimg(F,X,Y) :-
+  pfun(F) 
+  & id(X,M1) 
+  & comppf(M1,F,M2) 
+  & ran(M2,Y).
+
+rimg2(R,X,Y) :-
+  id(X,M1) 
+  & comp(M1,R,M2) 
+  & ran(M2,Y).
+
+% domain functional restriction
+% same as dres but for functions
+dfes(X,F,G) :-
+  pfun(F) 
+  & id(X,M1) 
+  & comppf(M1,F,G).
+
+ndfes(X,F,G) :-
+  pfun(F) 
+  & id(X,M1) 
+  & ncomp(M1,F,G).
+
+% bool(X) :- un(X,{{}},{{}}).
+bool(X) :- X = {} or X = {{}}.
+
+zero(U1,U2,X,Z) :-
+  un(X,M1,cp(U1,U2))
+  & disj(X,M1)
+  & inters(X,M1,Z).
+
+top(U1,U2,X,T) :-
+  un(X,M1,cp(U1,U2))
+  & disj(X,M1)
+  & un(X,M1,T).
+
+and(P,Q,R) :-
+  bool(P) & bool(Q) & bool(R) & inters(P,Q,R).
+
+or(P,Q,R) :-
+  bool(P) & bool(Q) & bool(R) & un(P,Q,R).
+
+not(P,Q) :-
+  bool(P) & bool(Q) & un(P,Q,{{}}) & disj(P,Q).
+
+set_to_list({},[]).          
+set_to_list({X/Set},List) :- 
+   X nin Set &
+   List = [X|L] & 
+   set_to_list(Set,L).
+
+max(X,Y,Z) :-
+  X =< Y & Z = Y
+  or
+  Y < X & Z = X.
+
+min(X,Y,Z) :-
+  X =< Y & Z = X
+  or
+  Y < X & Z = Y.
+
