@@ -9024,7 +9024,10 @@ conj_append(X,Cj2,(X & Cj2)).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%% path name to the working directory (default: '.')
-path('').
+%path('').
+:- 	prolog_load_context(directory, Directory0),
+	atom_concat(Directory0, '/', Directory),
+	assertz(path(Directory)).
 
 %%% filtering rules library (default: 'setlog_rules.pl')
 rw_rules('setlog_rules.pl').
