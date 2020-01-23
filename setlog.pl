@@ -57,7 +57,7 @@
 
 :- dynamic(isetlog/2).
 :- dynamic(newpred_counter/1).
-:- dynamic(context/1).
+:- dynamic(ctx/1).
 :- dynamic(final/0).         %default: no final
 :- dynamic(nowarning/0).     %default: warning
 :- dynamic(filter_on/0).     %default: no filter_on
@@ -1558,7 +1558,7 @@ mk_file_name(F,FullName) :-
 %%%%%%%%   Consulting and storing {log} clauses
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-context(usr).
+ctx(usr).
 
 read_loop_np(FileStream) :-
     setlog_read(FileStream,Clause),
@@ -1594,23 +1594,23 @@ assert_or_solve(Clause,N) :-
     write('Clause '), write(N), write(' stored'), nl.
 
 setassert(Clause) :-
-    context(Ctxt),
+    ctx(Ctxt),
     setassert(Clause,Ctxt).
 setassert(Clause,Ctxt) :-
     transform_clause(Clause,BaseClause),
     assertz(setlog:isetlog(BaseClause,Ctxt)).
 
 switch_ctxt(NewCtxt,OldCtxt) :-
-    retract(context(OldCtxt)),
-    assertz(context(NewCtxt)).
+    retract(ctx(OldCtxt)),
+    assertz(ctx(NewCtxt)).
 
 tmp_switch_ctxt(OldCtxt) :-
-    context(OldCtxt),
+    ctx(OldCtxt),
     functor(OldCtxt,tmp,_),!.
 tmp_switch_ctxt(OldCtxt) :-
-    retract(context(OldCtxt)),
+    retract(ctx(OldCtxt)),
     NewCtxt = tmp(OldCtxt),
-    assertz(context(NewCtxt)).
+    assertz(ctx(NewCtxt)).
 
 syntax_error_cont_msg(Text) :-
     write('Syntax error: '), write(Text), nl. 
@@ -6981,12 +6981,12 @@ no_type_error_all(_C,[]) :- !.
 no_type_error_all(C,[B|R]) :-
     C =.. [F1,X], B =.. [F2,Y],
     X == Y, F1 \== F2, !,
-    \+type_error(F1,F2),
+    \+ check_type_error(F1,F2),
     no_type_error_all(C,R).
 no_type_error_all(C,[_B|R]) :-
     no_type_error_all(C,R).
 
-type_error(F1,F2) :-
+check_type_error(F1,F2) :-
     incompatible(F1,LInc),
     member(F2,LInc).
 
