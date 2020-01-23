@@ -185,7 +185,7 @@ syntax_error_msg(_Text) :-
     throw(setlog_excpt('syntax error')).  
 
 skip_return :-
-    read_pending_input(user_input,_C,[]).
+    read_pending_codes(user_input,_C,[]).
 
 %%%%%%%%%%%
 
@@ -1081,7 +1081,7 @@ ssolve(A,_C,_D):-
        functor(A,Pname,N),
        functor(P,Pname,N),
        \+isetlog((P :- _B),_),
-       throw(setlog_excpt('undefined procedure')). 
+       throw(setlog_excpt('undefined procedure'(Pname/N))). 
 
 our_clause(A,B,C) :-
     functor(A,Pname,N),
