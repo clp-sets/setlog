@@ -1598,7 +1598,7 @@ setassert(Clause) :-
     setassert(Clause,Ctxt).
 setassert(Clause,Ctxt) :-
     transform_clause(Clause,BaseClause),
-    assertz(setlog:isetlog(BaseClause,Ctxt)).
+    assertz(isetlog(BaseClause,Ctxt)).
 
 switch_ctxt(NewCtxt,OldCtxt) :-
     retract(ctx(OldCtxt)),
@@ -8187,7 +8187,7 @@ newpred_counter(0).
 newpred(P,A,T) :-
     retract(newpred_counter(Y)), !,
     Z is Y + 1,
-    assertz(setlog:newpred_counter(Z)),
+    assertz(newpred_counter(Z)),
     name(Y,Ylist),
     append(T,Ylist,Plist),
     name(Pred,Plist),
