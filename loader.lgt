@@ -1,5 +1,10 @@
 
-:- use_module(library(dialect/sicstus/timeout)).
+:- use_module(library(lists)).
+:- if(current_prolog_flag(dialect, swi)).
+	:- use_module(library(dialect/sicstus/timeout)).
+:- elif(current_prolog_flag(dialect, sicstus)).
+	:- use_module(library(timeout)).
+:- endif.
 :- use_module(library(clpfd)).
 :- use_module(library(clpq)).
 

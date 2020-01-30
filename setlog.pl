@@ -53,7 +53,6 @@
 
 :- use_module(library(dialect/sicstus/timeout)).
 :- use_module(library(lists), [append/3,member/2]).
-:- use_module(library(backcomp), [read_pending_input/3]).
 
 :- dynamic(isetlog/2).
 :- dynamic(newpred_counter/1).
