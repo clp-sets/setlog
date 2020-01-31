@@ -21,7 +21,6 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 :- module(setlog, [
-    op(980,xfx,:),
     op(970,xfy,or),
     op(950,xfy,&),
     op(900,fy,[neg,naf]),
@@ -291,8 +290,6 @@ rename_fresh_vars([],Num,Num).
 rename_fresh_vars([X|R],Num,NumF) :-
     var(X),!,
     name(Num,NumCodeList),
-%   append([78,95],NumCodeList,CodeList),   %N_
-%   append([78],NumCodeList,CodeList),
     CodeList = [95,78|NumCodeList],   %_N
     name(XNew,CodeList),
     X=XNew,
@@ -711,7 +708,7 @@ h(syntax) :-
     write('        - cp(A,B): the set {[x,y] : x in A & y in B}'), nl,
     write('     5. Intensional Sets (IS):'), nl,
     write('        (X: variable; G: any {log} goal containing X)'), nl,
-    write('        - {X : G}'), nl,
+    write('        - {X : (G)}'), nl,
     write('        - {X : exists(V,G)}, V variable local to G'), nl,
     write('        - {X : exists([V1,...,Vn],G)}, '), nl,
     write('          V1,...,Vn variables local to G'), nl,
@@ -885,8 +882,8 @@ write_built_list :-
 write_built_list.
 
 check_lib :-
-    solve(setlog_lib_help,_),
-    !.
+    isetlog((setlog_lib_help :- _),_),!, 
+    solve(setlog_lib_help,_).
 check_lib :-
     write('{log} library predicates not available'),nl,
     write('Type consult_lib to load the {log} library '),nl.
