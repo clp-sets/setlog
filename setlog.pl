@@ -9048,7 +9048,7 @@ fd_labeling_strategy([]).
 
 %%% type constraints to be printed in the computed answer (default: all)
 type_constraints_to_be_shown([set(_),bag(_),list(_),integer(_),rel(_),pfun(_),pair(_),
-                              nset(_),ninteger(_),nrel(),npfun(_),npair(_)]).     %all
+                              nset(_),ninteger(_),nrel(_),npfun(_),npair(_)]).     %all
 %type_constraints_to_be_shown([set(_),integer(_),pfun(_),nset(_),ninteger(_),bag(_),list(_)]).
 %type_constraints_to_be_shown([]).                                         %none
 
