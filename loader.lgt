@@ -8,7 +8,6 @@
 :- use_module(library(clpfd)).
 :- use_module(library(clpq)).
 
-:- op(980,xfx,:).
 :- op(970,xfy,or).
 :- op(950,xfy,&).
 :- op(900,fy,[neg,naf]).
@@ -19,5 +18,11 @@
 :- op(150,fx,*).
 
 :- initialization((
+	logtalk_load(os(loader)),
 	logtalk_load(setlog)
 )).
+
+:- if(current_prolog_flag(dialect, sicstus)).
+	exists_file(File) :-
+		os::file_exists(File).
+:- endif.

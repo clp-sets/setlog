@@ -23,7 +23,6 @@
 :- object(setlog).
 
 :- public([
-    op(980,xfx,:),
     op(970,xfy,or),
     op(950,xfy,&),
     op(900,fy,[neg,naf]),
@@ -53,12 +52,23 @@
     h/1
 ]).
 
-:- if(current_prolog_flag(dialect, swi)).
-	:- use_module(library(dialect/sicstus/timeout)).
-:- elif(current_prolog_flag(dialect, sicstus)).
-	:- use_module(library(timeout)).
-:- endif.
+:- uses(os, [file_exists/1 as exists_file/1]).
+
+:- use_module(timeout, [time_out/3]).
 :- use_module(lists, [append/3,member/2]).
+:- use_module(clpq, [bb_inf/4]).
+:- use_module(clpfd, [
+	(#/\)/2, (#<)/2, (#<==)/2, (#<==>)/2, (#=)/2, (#=<)/2, (#==>)/2, (#>)/2,
+	(#>=)/2, (#\)/1, (#\)/2, (#\/)/2, (#\=)/2,
+	fd_dom/2, fd_inf/2, fd_size/2, fd_sup/2, fd_var/1,
+	(in)/2, (ins)/2,
+	label/1, labeling/2, sum/3
+]).
+:- meta_predicate(clpfd:labeling(*, *)).
+:- meta_predicate(clpfd:((*) #/\ (*))).
+:- meta_predicate(clpfd:(#\ (*))).
+:- meta_predicate(clpfd:((*) #\ (*))).
+:- meta_predicate(clpfd:((*) #\/ (*))).
 
 :- dynamic(isetlog/2).
 :- dynamic(newpred_counter/1).
@@ -717,7 +727,7 @@ h(syntax) :-
     write('        - cp(A,B): the set {[x,y] : x in A & y in B}'), nl,
     write('     5. Intensional Sets (IS):'), nl,
     write('        (X: variable; G: any {log} goal containing X)'), nl,
-    write('        - {X : G}'), nl,
+    write('        - {X : (G)}'), nl,
     write('        - {X : exists(V,G)}, V variable local to G'), nl,
     write('        - {X : exists([V1,...,Vn],G)}, '), nl,
     write('          V1,...,Vn variables local to G'), nl,
@@ -891,8 +901,8 @@ write_built_list :-
 write_built_list.
 
 check_lib :-
-    solve(setlog_lib_help,_),
-    !.
+    isetlog((setlog_lib_help :- _),_),!,
+    solve(setlog_lib_help,_).
 check_lib :-
     write('{log} library predicates not available'),nl,
     write('Type consult_lib to load the {log} library '),nl.
@@ -7195,8 +7205,6 @@ finalize_int_constr(C) :-
 %%%%%%%%%%%%%%%%     clp(FD) constraints
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-:- use_module(library(clpfd)).
-
 solve_FD(Constr,NewC) :-        % Solve the constraint 'Constr' using the CLP(FD) solver
     %%%write(solve_FD(Constr)),nl,
     tau(Constr,FD_Constr,NewC),
@@ -7310,8 +7318,6 @@ check_domain(_,[]).
 %%%%%%%%%%%%%%%%     clp(Q) constraints
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-:- use_module(library(clpq)).
-
 solve_Q(Constr,NewC) :-             % solve the constraint 'Constr' using the CLP(Q) solver
     %%%write(solve_Q(Constr)),nl,
     rho(Constr,Q_Constr,NewC),
@@ -7319,7 +7325,7 @@ solve_Q(Constr,NewC) :-             % solve the constraint 'Constr' using the CL
     call(Q_Constr).
 
 q_expr(X,E) :-
-    {X = E}.
+    clpq:{X = E}.
 
 rho(X is E,{CLPq_constr},[glb_state(X is E)]) :- !,
     CLPq_constr = (X = E).
@@ -7410,9 +7416,9 @@ bb_inf_all(L,[_X|R]) :-
     bb_inf_all(L,R).
 
 bb_inf_single(L,X) :-
-    {X>=0},bb_inf(L,X,_,_).
+    clpq:{X>=0}, bb_inf(L,X,_,_).
 bb_inf_single(L,X) :-
-    {X<0},bb_inf(L,-X,_,_).
+    clpq:{X<0}, bb_inf(L,-X,_,_).
 
 labeling_Q(_) :-                     % if nolabel, do nothing
     nolabel,!.
