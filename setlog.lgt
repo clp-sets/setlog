@@ -55,7 +55,7 @@
 :- uses(os, [file_exists/1 as exists_file/1]).
 
 :- use_module(timeout, [time_out/3]).
-:- use_module(lists, [append/3,member/2]).
+:- use_module(lists, [append/3,member/2,nth1/3]).
 :- use_module(clpq, [bb_inf/4]).
 :- use_module(clpfd, [
 	(#/\)/2, (#<)/2, (#<==)/2, (#<==>)/2, (#=)/2, (#=<)/2, (#==>)/2, (#>)/2,
