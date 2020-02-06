@@ -4792,12 +4792,15 @@ sat_disj_ris([disj(I,A)|R1],R2,c,F) :-                        % disj(A,ris(...))
 
 %%%%%%%%%%%%%%%%%%%%%% not union (nun/3)
 
-%sat_nun([nun(S1,S2,S3)|R1],R2,c,F) :-               % nun(s1,s2,s3)
-%    sat_step([N in S3,N nin S1,N nin S2|R1],R2,_,F).
-%sat_nun([nun(S1,_S2,S3)|R1],R2,c,F) :-              %
-%    sat_step([N in S1,N nin S3|R1],R2,_,F).
-%sat_nun([nun(_S1,S2,S3)|R1],R2,c,F) :-              %
-%    sat_step([N in S2,N nin S3|R1],R2,_,F).
+sat_nun([nun(S1,S2,S3)|R1],R2,c,F) :-
+	threaded_engine_create(vs(S1,S2,S3,R1,R2,F), sat_nun_([nun(S1,S2,S3)|R1],R2,c,F), Engine),
+	(	threaded_engine_next_reified(Engine, Solution),
+		(	Solution == no -> fail
+		;	Solution = exception(Error) -> throw(Error)
+		;	Solution = the(vs(S1,S2,S3,R1,R2,F))
+		)
+	;	threaded_engine_destroy(Engine)
+	).
 
 sat_nun_([nun(S1,S2,S3)|R1],R2,c,F) :-               % nun(s1,s2,s3)
     sat_step([N in S3,N nin S1,N nin S2|R1],R2,_,F).
@@ -4805,25 +4808,6 @@ sat_nun_([nun(S1,_S2,S3)|R1],R2,c,F) :-              %
     sat_step([N in S1,N nin S3|R1],R2,_,F).
 sat_nun_([nun(_S1,S2,S3)|R1],R2,c,F) :-              %
     sat_step([N in S2,N nin S3|R1],R2,_,F).
-
-sat_nun([nun(S1,S2,S3)|R1],R2,c,F) :-
-	threaded_engine_create(vs(S1,S2,S3,R1,R2,F), sat_nun_([nun(S1,S2,S3)|R1],R2,c,F), sat_nun),
-	(	threaded_engine_next_reified(sat_nun, Solution),
-		(	Solution == no -> fail
-		;	Solution = exception(Error) -> throw(Error)
-		;	Solution = the(vs(S1,S2,S3,R1,R2,F))
-		)
-	;	threaded_engine_destroy(sat_nun)
-	).
-
-
-%sat_nun([nun(S1,S2,S3)|R1],R2,c,F) :-               % nun(s1,s2,s3)
-%	threaded((
-%		sat_step([N in S3,N nin S1,N nin S2|R1],R2,_,F)
-%	;	sat_step([N in S1,N nin S3|R1],R2,_,F)
-%	;	sat_step([N in S2,N nin S3|R1],R2,_,F)
-%	)).
-
 
 %%%%%%%%%%%%%%%%%%%%%% not disjointness (ndisj/2)
 
