@@ -4795,18 +4795,18 @@ sat_disj_ris([disj(I,A)|R1],R2,c,F) :-                        % disj(A,ris(...))
 sat_nun([nun(S1,S2,S3)|R1],R2,c,F) :-
 	threaded_engine_create(vs(S1,S2,S3,R1,R2,F), sat_nun_([nun(S1,S2,S3)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nun_engine(Solution, Engine).
+	sat_nun_engine(Solution, vs(S1,S2,S3,R1,R2,F), Engine).
 
-sat_nun_engine(no, Engine) :-
+sat_nun_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_nun_engine(exception(Error), Engine) :-
+sat_nun_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_nun_engine(the(vs(S1,S2,S3,R1,R2,F)), _).
-sat_nun_engine(the(_), Engine) :-
+sat_nun_engine(the(vs(S1,S2,S3,R1,R2,F)), vs(S1,S2,S3,R1,R2,F), _).
+sat_nun_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nun_engine(Solution, Engine).
+	sat_nun_engine(Solution, Vs, Engine).
 
 sat_nun_([nun(S1,S2,S3)|R1],R2,c,F) :-               % nun(s1,s2,s3)
     sat_step([N in S3,N nin S1,N nin S2|R1],R2,_,F).
@@ -6159,18 +6159,18 @@ sat_npair([npair(X)|R1],R2,c,F) :-                % npair([a,b,c,...])
 sat_ndom([ndom(R,A)|R1],R2,c,F) :-
 	threaded_engine_create(vs(R,A,R1,R2,F), sat_ndom_([ndom(R,A)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ndom_engine(Solution, Engine).
+	sat_ndom_engine(Solution, vs(R,A,R1,R2,F), Engine).
 
-sat_ndom_engine(no, Engine) :-
+sat_ndom_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_ndom_engine(exception(Error), Engine) :-
+sat_ndom_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_ndom_engine(the(vs(R,A,R1,R2,F)), _).
-sat_ndom_engine(the(_), Engine) :-
+sat_ndom_engine(the(vs(R,A,R1,R2,F)), vs(R,A,R1,R2,F), _).
+sat_ndom_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ndom_engine(Solution, Engine).
+	sat_ndom_engine(Solution, Vs, Engine).
 
 sat_ndom_([ndom(R,A)|R1],R2,c,F) :-                % ndom(R,A)
     (   sat_step([[N1,_N2] in R, N1 nin A |R1],R2,_,F)
@@ -6184,18 +6184,18 @@ sat_ndom_([ndom(R,A)|R1],R2,c,F) :-                % ndom(R,A)
 sat_ninv([ninv(R,S)|R1],R2,c,F) :-
 	threaded_engine_create(vs(R,S,R1,R2,F), sat_ninv_([ninv(R,S)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ninv_engine(Solution, Engine).
+	sat_ninv_engine(Solution, vs(R,S,R1,R2,F), Engine).
 
-sat_ninv_engine(no, Engine) :-
+sat_ninv_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_ninv_engine(exception(Error), Engine) :-
+sat_ninv_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_ninv_engine(the(vs(R,S,R1,R2,F)), _).
-sat_ninv_engine(the(_), Engine) :-
+sat_ninv_engine(the(vs(R,S,R1,R2,F)), vs(R,S,R1,R2,F), _).
+sat_ninv_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ninv_engine(Solution, Engine).
+	sat_ninv_engine(Solution, Vs, Engine).
 
 sat_ninv_([ninv(R,S)|R1],R2,c,F) :-                % ninv(R,R)
     var(R),var(S),R == S,!,
@@ -6215,18 +6215,18 @@ sat_ninv_([ninv(R,S)|R1],R2,c,F) :-                % ninv(R,S)
 sat_ncomp([ncomp(R,S,T)|R1],R2,c,F) :-
 	threaded_engine_create(vs(R,S,T,R1,R2,F), sat_ncomp_([ncomp(R,S,T)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ncomp_engine(Solution, Engine).
+	sat_ncomp_engine(Solution, vs(R,S,T,R1,R2,F), Engine).
 
-sat_ncomp_engine(no, Engine) :-
+sat_ncomp_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_ncomp_engine(exception(Error), Engine) :-
+sat_ncomp_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_ncomp_engine(the(vs(R,S,T,R1,R2,F)), _).
-sat_ncomp_engine(the(_), Engine) :-
+sat_ncomp_engine(the(vs(R,S,T,R1,R2,F)), vs(R,S,T,R1,R2,F), _).
+sat_ncomp_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ncomp_engine(Solution, Engine).
+	sat_ncomp_engine(Solution, Vs, Engine).
 
 sat_ncomp_([ncomp(R,S,T)|R1],R2,c,F) :-            % ncomp(R,S,T)
     (   sat_step([[X,Y] in R, [Y,Z] in S, [X,Z] nin T|R1],R2,_,F)
@@ -6244,18 +6244,18 @@ sat_ncomp_([ncomp(R,S,T)|R1],R2,c,F) :-            % ncomp(R,S,T)
 sat_nran([nran(R,A)|R1],R2,c,F) :-
 	threaded_engine_create(vs(R,A,R1,R2,F), sat_nran_([nran(R,A)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nran_engine(Solution, Engine).
+	sat_nran_engine(Solution, vs(R,A,R1,R2,F), Engine).
 
-sat_nran_engine(no, Engine) :-
+sat_nran_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_nran_engine(exception(Error), Engine) :-
+sat_nran_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_nran_engine(the(vs(R,A,R1,R2,F)), _).
-sat_nran_engine(the(_), Engine) :-
+sat_nran_engine(the(vs(R,A,R1,R2,F)), vs(R,A,R1,R2,F), _).
+sat_nran_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nran_engine(Solution, Engine).
+	sat_nran_engine(Solution, Vs, Engine).
 
 sat_nran_([nran(R,A)|R1],R2,c,F) :-                % nran(R,A)
     (   sat_step([[_N1,N2] in R, N2 nin A|R1],R2,_,F)
@@ -6269,18 +6269,18 @@ sat_nran_([nran(R,A)|R1],R2,c,F) :-                % nran(R,A)
 sat_ndres([ndres(A,R,S)|R1],R2,c,F) :-
 	threaded_engine_create(vs(A,R,S,R1,R2,F), sat_ndres_([ndres(A,R,S)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ndres_engine(Solution, Engine).
+	sat_ndres_engine(Solution, vs(A,R,S,R1,R2,F), Engine).
 
-sat_ndres_engine(no, Engine) :-
+sat_ndres_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_ndres_engine(exception(Error), Engine) :-
+sat_ndres_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_ndres_engine(the(vs(A,R,S,R1,R2,F)), _).
-sat_ndres_engine(the(_), Engine) :-
+sat_ndres_engine(the(vs(A,R,S,R1,R2,F)), vs(A,R,S,R1,R2,F), _).
+sat_ndres_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ndres_engine(Solution, Engine).
+	sat_ndres_engine(Solution, Vs, Engine).
 
 sat_ndres_([ndres(A,R,S)|R1],R2,c,F) :-
     (   sat_step([[N1,_N2] in S,N1 nin A|R1],R2,_,F)
@@ -6295,18 +6295,18 @@ sat_ndres_([ndres(A,R,S)|R1],R2,c,F) :-
 sat_ndares([ndares(A,R,S)|R1],R2,c,F) :-
 	threaded_engine_create(vs(A,R,S,R1,R2,F), sat_ndares_([ndares(A,R,S)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ndares_engine(Solution, Engine).
+	sat_ndares_engine(Solution, vs(A,R,S,R1,R2,F), Engine).
 
-sat_ndares_engine(no, Engine) :-
+sat_ndares_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_ndares_engine(exception(Error), Engine) :-
+sat_ndares_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_ndares_engine(the(vs(A,R,S,R1,R2,F)), _).
-sat_ndares_engine(the(_), Engine) :-
+sat_ndares_engine(the(vs(A,R,S,R1,R2,F)), vs(A,R,S,R1,R2,F), _).
+sat_ndares_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_ndares_engine(Solution, Engine).
+	sat_ndares_engine(Solution, Vs, Engine).
 
 sat_ndares_([ndares(A,R,S)|R1],R2,c,F) :-
     (   sat_step([[N1,_N2] in S,N1 in A|R1],R2,_,F)
@@ -6321,18 +6321,18 @@ sat_ndares_([ndares(A,R,S)|R1],R2,c,F) :-
 sat_nrres([nrres(R,A,S)|R1],R2,c,F) :-
 	threaded_engine_create(vs(R,A,S,R1,R2,F), sat_nrres_([nrres(R,A,S)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nrres_engine(Solution, Engine).
+	sat_nrres_engine(Solution, vs(R,A,S,R1,R2,F), Engine).
 
-sat_nrres_engine(no, Engine) :-
+sat_nrres_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_nrres_engine(exception(Error), Engine) :-
+sat_nrres_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_nrres_engine(the(vs(R,A,S,R1,R2,F)), _).
-sat_nrres_engine(the(_), Engine) :-
+sat_nrres_engine(the(vs(R,A,S,R1,R2,F)), vs(R,A,S,R1,R2,F), _).
+sat_nrres_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nrres_engine(Solution, Engine).
+	sat_nrres_engine(Solution, Vs, Engine).
 
 sat_nrres_([nrres(R,A,S)|R1],R2,c,F) :-
     (   sat_step([[_N1,N2] in S,N2 nin A|R1],R2,_,F)
@@ -6347,18 +6347,18 @@ sat_nrres_([nrres(R,A,S)|R1],R2,c,F) :-
 sat_nrares([nrares(R,A,S)|R1],R2,c,F) :-
 	threaded_engine_create(vs(R,A,S,R1,R2,F), sat_nrares_([nrares(R,A,S)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nrares_engine(Solution, Engine).
+	sat_nrares_engine(Solution, vs(R,A,S,R1,R2,F), Engine).
 
-sat_nrares_engine(no, Engine) :-
+sat_nrares_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_nrares_engine(exception(Error), Engine) :-
+sat_nrares_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_nrares_engine(the(vs(R,A,S,R1,R2,F)), _).
-sat_nrares_engine(the(_), Engine) :-
+sat_nrares_engine(the(vs(R,A,S,R1,R2,F)), vs(R,A,S,R1,R2,F), _).
+sat_nrares_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nrares_engine(Solution, Engine).
+	sat_nrares_engine(Solution, Vs, Engine).
 
 sat_nrares_([nrares(R,A,S)|R1],R2,c,F) :-
     (   sat_step([[_N1,N2] in S,N2 in A |R1],R2,_,F)
@@ -6373,18 +6373,18 @@ sat_nrares_([nrares(R,A,S)|R1],R2,c,F) :-
 sat_napply([napply(S,X,Y)|R1],R2,c,F) :-
 	threaded_engine_create(vs(S,X,Y,R1,R2,F), sat_napply_([napply(S,X,Y)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_napply_engine(Solution, Engine).
+	sat_napply_engine(Solution, vs(S,X,Y,R1,R2,F), Engine).
 
-sat_napply_engine(no, Engine) :-
+sat_napply_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_napply_engine(exception(Error), Engine) :-
+sat_napply_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_napply_engine(the(vs(S,X,Y,R1,R2,F)), _).
-sat_napply_engine(the(_), Engine) :-
+sat_napply_engine(the(vs(S,X,Y,R1,R2,F)), vs(S,X,Y,R1,R2,F), _).
+sat_napply_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_napply_engine(Solution, Engine).
+	sat_napply_engine(Solution, Vs, Engine).
 
 sat_napply_([napply(S,X,Y)|R1],R2,c,F) :-
     (   sat_step([[X,Y] nin S|R1],R2,_,F)
@@ -6397,18 +6397,18 @@ sat_napply_([napply(S,X,Y)|R1],R2,c,F) :-
 sat_nrimg([nrimg(R,A,B)|R1],R2,c,F) :-
 	threaded_engine_create(vs(R,A,B,R1,R2,F), sat_nrimg_([nrimg(R,A,B)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nrimg_engine(Solution, Engine).
+	sat_nrimg_engine(Solution, vs(R,A,B,R1,R2,F), Engine).
 
-sat_nrimg_engine(no, Engine) :-
+sat_nrimg_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_nrimg_engine(exception(Error), Engine) :-
+sat_nrimg_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_nrimg_engine(the(vs(R,A,B,R1,R2,F)), _).
-sat_nrimg_engine(the(_), Engine) :-
+sat_nrimg_engine(the(vs(R,A,B,R1,R2,F)), vs(R,A,B,R1,R2,F), _).
+sat_nrimg_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nrimg_engine(Solution, Engine).
+	sat_nrimg_engine(Solution, Vs, Engine).
 
 sat_nrimg_([nrimg(R,A,B)|R1],R2,c,F) :-
     (   sat_step([N0 nin B,dres(A,R,N1),[N3,N0] in N1,N3 in A,rel(N1)|R1],R2,_,F)
@@ -6421,18 +6421,18 @@ sat_nrimg_([nrimg(R,A,B)|R1],R2,c,F) :-
 sat_noplus([noplus(R,S,T)|R1],R2,c,F) :-
 	threaded_engine_create(vs(R,S,T,R1,R2,F), sat_noplus_([noplus(R,S,T)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_noplus_engine(Solution, Engine).
+	sat_noplus_engine(Solution, vs(R,S,T,R1,R2,F), Engine).
 
-sat_noplus_engine(no, Engine) :-
+sat_noplus_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_noplus_engine(exception(Error), Engine) :-
+sat_noplus_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_noplus_engine(the(vs(R,S,T,R1,R2,F)), _).
-sat_noplus_engine(the(_), Engine) :-
+sat_noplus_engine(the(vs(R,S,T,R1,R2,F)), vs(R,S,T,R1,R2,F), _).
+sat_noplus_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_noplus_engine(Solution, Engine).
+	sat_noplus_engine(Solution, Vs, Engine).
 
 sat_noplus_([noplus(R,S,T)|R1],R2,c,F) :-
     (   sat_step([[N1,N2] in T,[N1,N2] nin S,[N1,N2] nin R |R1],R2,_,F)
@@ -6449,18 +6449,18 @@ sat_noplus_([noplus(R,S,T)|R1],R2,c,F) :-
 sat_nid([nid(A,S)|R1],R2,c,F) :-
 	threaded_engine_create(vs(A,S,R1,R2,F), sat_nid_([nid(A,S)|R1],R2,c,F), Engine),
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nid_engine(Solution, Engine).
+	sat_nid_engine(Solution, vs(A,S,R1,R2,F), Engine).
 
-sat_nid_engine(no, Engine) :-
+sat_nid_engine(no, _, Engine) :-
 	threaded_engine_destroy(Engine),
 	fail.
-sat_nid_engine(exception(Error), Engine) :-
+sat_nid_engine(exception(Error), _, Engine) :-
 	threaded_engine_destroy(Engine),
 	throw(Error).
-sat_nid_engine(the(vs(A,S,R1,R2,F)), _).
-sat_nid_engine(the(_), Engine) :-
+sat_nid_engine(the(vs(A,S,R1,R2,F)), vs(A,S,R1,R2,F), _).
+sat_nid_engine(the(_), Vs, Engine) :-
 	threaded_engine_next_reified(Engine, Solution),
-	sat_nid_engine(Solution, Engine).
+	sat_nid_engine(Solution, Vs, Engine).
 
 sat_nid_([nid(A,S)|R1],R2,c,F) :-
     (   sat_step([N1 in A, [N1,N1] nin S |R1],R2,_,F)
