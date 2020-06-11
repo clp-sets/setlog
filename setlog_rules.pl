@@ -1,4 +1,6 @@
 
+% Version 1.2-15
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
 % User-defined "filtering" rules
@@ -9,7 +11,7 @@
 %           by Maximiliano Cristia' and  Gianfranco Rossi
 %                          April 2014
 %
-%                     Revised March 2017
+%                     Revised March 2020
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -49,21 +51,39 @@ equiv_rule(e6,X nin Y,X enin Y).                 % e6. X enin Y => X nin Y
 %%%%% general
 
 % t = X -replace-> X = t
-replace_rule(br3,T=X,[var(X),nonvar(T)],[],[],X=T).
+replace_rule(r1,T=X,[var(X),nonvar(T)],[],[],X=T).
+
+% X = Y -replace-> true & apply sustitution 
+%replace_rule(r2,X = Y,[var(X),var(Y),X=Y],[],[],true).  %NEW
 
 %%%%% sets
 
 % inters(X,{...},t3) -replace-> inters({...},X,t3)
-replace_rule(r3,inters(X,T2,T3),[var(X),nonvar(T2)],[],[],inters(T2,X,T3)).
+replace_rule(sr1,inters(X,T2,T3),[var(X),nonvar(T2)],[],[],inters(T2,X,T3)).
 
 % A neq B & set(A) & set(B) -replace-> (X in A & X nin B or X nin A & X in B) 
-replace_rule(r4,A neq B,[var(A),var(B)],[set(A1),set(B1)],[A1==A,B1==B],(X in A & X nin B or X nin A & X in B)).
+replace_rule(sr2,A neq B,[var(A),var(B)],[set(A1),set(B1)],[A1==A,B1==B],(X in A & X nin B or X nin A & X in B)).
 %
 % A neq {...} & set(A) -replace-> (X in A & X nin {...} or X nin A & X in {...}) 
-replace_rule(r4,A neq B,[var(A),B=_ with _],[set(A1)],[A1==A],(X in A & X nin B or X nin A & X in B)).
+replace_rule(sr3,A neq B,[var(A),nonvar(B),B=_ with _],[set(A1)],[A1==A],(X in A & X nin B or X nin A & X in B)).
 %
 % {...} neq B & set(B) -replace-> (X in B & X nin {...} or X nin B & X in {...}) 
-replace_rule(r4,A neq B,[var(B),A=_ with _],[set(B1)],[B1==B],(X in A & X nin B or X nin A & X in B)).
+replace_rule(sr4,A neq B,[var(B),nonvar(A),A=_ with _],[set(B1)],[B1==B],(X in A & X nin B or X nin A & X in B)).
+
+% subset(A,B) & diff(B,A,C) -replace-> subset(A,B) & un(A,C,B) & disj(A,C)  
+replace_rule(sr5,diff(B,A,C),[],[subset(A1,B1)],[A1==A,B1==B],(un(A,C,B) & disj(A,C))).
+%
+% subset(A,B) & un(A,C,B) -replace-> un(A,C,B)  
+replace_rule(sr5_bis,subset(A,B),[],[un(A1,_C,B1)],[A1==A,B1==B],true).
+
+% un(A,B,B) & diff(B,A,C) -replace-> un(A,B,B) & un(A,C,B) & disj(A,C)
+replace_rule(sr6,diff(B,A,C),[],[un(A1,B1,B2)],[A1==A,B1==B,B2==B],(un(A,C,B) & disj(A,C))).
+%
+% un(A,B,B) & un(A,C,B) -replace-> un(A,C,B)  
+replace_rule(sr6_bis,un(A,Ba,Bb),[Ba==Bb],[un(A1,C,B1)],[A1==A,B1==Ba,C\==B1],true).
+
+% diff(B,A,C) & diff(B,D,E) & D=A -replace-> diff(B,D,C) & A=D & E=C  
+replace_rule(sr7,diff(B,A,C),[],[diff(B1,D,E),D1=A1],[A1==A,B1==B,D1==D],E=C).
 
 %%%%% relations/partial functions    
 
@@ -98,14 +118,13 @@ replace_rule(br9bis,un(S,CP1,CP2),[var(S),nonvar(CP1),CP1=cp(C,D),var(C),var(D),
 replace_rule(br10,subset(S,CP2),[var(S),nonvar(CP2),CP2=cp(A,B),var(A),A==B],
               [],[],G=subset(S,CP2) & delay(G,false) ).
 
-
 %%%%% integer numbers
 
 % X < Y -replace-> Y > X
-replace_rule(br1,X < Y,[var(X),var(Y)],[],[],Y > X).
+replace_rule(ir1,X < Y,[var(X),var(Y)],[],[],Y > X).
 
 % X =< Y -replace-> Y >= X
-replace_rule(br2,X =< Y,[var(X),var(Y)],[],[],Y >= X).
+replace_rule(ir2,X =< Y,[var(X),var(Y)],[],[],Y >= X).
 
 %TO BE COMPLETED
 

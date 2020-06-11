@@ -1,4 +1,5 @@
 
+   
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
 %%                The {log} interpreter and solver
@@ -16,7 +17,7 @@
 %%
 %%                        Last revision by
 %%               Gianfranco Rossi and Maximiliano Cristia'
-%%                         (December 2019)   
+%%                         (May 2020)   
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -37,7 +38,7 @@
     setlog/3,
     setlog/4,
     setlog/5,
-	rsetlog/5,
+    rsetlog/5,
     setlog_InOut/3,
     setlog_InOut_partial/3,
     setlog_InOut_SC/3,
@@ -46,6 +47,7 @@
     setlog_clause/1,
     setlog_config/1,
     setlog_rw_rules/0,
+    % setlog help system
     setlog_help/0,
     h/1
 ]).
@@ -56,20 +58,19 @@
 :- dynamic(isetlog/2).
 :- dynamic(newpred_counter/1).
 :- dynamic(ctx/1).
-:- dynamic(final/0).         %default: no final
-:- dynamic(nowarning/0).     %default: warning
-:- dynamic(filter_on/0).     %default: no filter_on
+:- dynamic(final/0).          %default: no final
+:- dynamic(nowarning/0).      %default: warning
+:- dynamic(filter_on/0).      %default: no filter_on
+:- dynamic(size_solver_on/0). %default: no size_solver_on   
+ 
+:- dynamic(nolabel/0).        %default: label
+:- dynamic(noneq_elim/0).     %default: neq_elim
+:- dynamic(noran_elim/0).     %default: ran_elim
+:- dynamic(nocomp_elim/0).    %default: comp_elim
+:- dynamic(noirules/0).       %default: irules
+:- dynamic(trace/1).          %default: no trace
 
-:- dynamic(nolabel/0).       %default: label
-:- dynamic(noneq_elim/0).    %default: neq_elim
-:- dynamic(noran_elim/0).    %default: ran_elim
-:- dynamic(nocomp_elim/0).   %default: comp_elim
-:- dynamic(noirules/0).      %default: irules
-:- dynamic(subset_elim/0).   %default: no subset_elim
-:- dynamic(trace/1).         %default: no trace
-:- dynamic(int_solver/1).    %default: as specified by default_int_solver/1
-
-:- dynamic(strategy/1).      %modifiable configuration params
+:- dynamic(strategy/1).       %modifiable configuration params
 :- dynamic(path/1).
 :- dynamic(rw_rules/1).
 :- dynamic(fd_labeling_strategy/1).
@@ -78,6 +79,7 @@
 :- multifile(inference_rule/7).
 :- multifile(fail_rule/6).
 :- multifile(equiv_rule/3).
+:- multifile(cond_check_size/2).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -117,22 +119,34 @@ setlog :-
     top_level.
 
 set_default :-
-    cond_retract(nowarning),      %restore default value: warning
+    cond_retract(nowarning),      %set default value: warning
     set_default_control,
-    cond_retract(nolabel),        %restore default value: label
-    retract_trace,                %restore default value: no trace
-    default_int_solver(IS),
-    ssolve(int_solver(IS),[],[]). %restore default value: clpfd
-set_default_control :-
-    cond_retract(noirules),       %restore default value: irules
-    cond_retract(noneq_elim),     %restore default value: neq_elim
-    cond_retract(noran_elim),     %restore default value: ran_elim
-    cond_retract(nocomp_elim),    %restore default value: comp_elim
-    cond_retract(final),          %restore default value: no final
-    cond_retract(subset_elim).    %restore default value: no subset_elim
+    cond_retract(nolabel),        %set default value: label
+    retract_trace,                %set default value: notrace
+    default_int_solver(IS),       %set default value: clpfd 
+    nb_setval(int_solver,IS).      
+set_default_control :-            
+    cond_retract(noirules),       %set default value: irules
+    cond_retract(noneq_elim),     %set default value: neq_elim
+    cond_retract(noran_elim),     %set default value: ran_elim
+    cond_retract(nocomp_elim),    %set default value: comp_elim
+    (size_solver_on ->            %set default value: solver/prover           
+        nb_setval(smode,solver)
+    ;
+        default_mode(M),
+        b_setval(smode,M)         
+    ),
+    nb_setval(fix_size,off),         %set default value: nofix_size   
+    nb_setval(show_min,off),         %set default value: noshow_min     %DDDDD
+    cond_retract(final),             %set  default value: nofinal
+    nb_setval(sum_min,0),            %set initial value = 0    
+    nb_setval(deep_check_size,off).  %set initial value = off       
 
 top_level :-
-    cond_retract(final),          %restore default value: no final
+    retractall(isetlog(_,tmp(usr))),   %remove setlog clauses possibly added by previous SF or RUQ
+    cond_retract(final),               %set default value: nofinal
+    nb_setval(sum_min,0),   	       %set initial value = 0      
+    nb_setval(deep_check_size,off),    %set initial value = off     
     nl, write('{log}=> '),
     catch(setlog_read_term(Goal,[variable_names(VarNames)]),      %e.g. VarNames=[X=_1,S=_2,Y=_3,R=_4]
               setlog_excpt(Msg),excpt_action(Msg)),                     
@@ -165,14 +179,6 @@ excpt_action(Msg) :-
         write('***ERROR***: '), write(Msg),   
         skip_return,
         top_level.
-%excpt_action(setlog_excpt(Msg)) :-
-%        write('***ERROR***: '), write(Msg),   
-%        skip_return,
-%        top_level.
-%excpt_action(_) :-
-%        write('***ERROR***: '), write('unhandled Prolog exception'),   
-%        skip_return,
-%        top_level.
 
 %%%%%%%%%%%
 
@@ -345,6 +351,7 @@ filter_and_check1([X in int(A,sup)|R],GC,[X >= A|ReducedC],Warning) :- !,   %rep
     filter_and_check1(R,GC,ReducedC,Warning).
 filter_and_check1([glb_state(Rel)|R],GC,ReducedC,Warning) :-   %remove constraints glb_state/1
     Rel =.. [_OP,E1,E2],                                    %e.g. glb_state(X>3) & X in int(10,sup)
+    int_solver(clpfd),          
     (   ground(E2), get_domain(E1,(E1 in _)) ->
         true
     ;
@@ -369,7 +376,7 @@ filter_and_check1([glb_state(Rel)|R],GC,[Rel|ReducedC],Warning) :- !, %extract C
     filter_and_check1(R,GC,ReducedC,Warning).
 
 filter_and_check1([C|R],GC,[C|ReducedC],Warning) :-
-    (   var(Warning), contains_open_int(C) ->
+    (   var(Warning), int_solver(clpfd), contains_open_int(C) ->
         Warning = 'not_finite_domain'
     ;
         true
@@ -467,17 +474,17 @@ setlog1(Goal,TimeOut,OutConstrLst,Res,[Opt1|ROpt]) :-
     setlogTimeOut_cont(ROpt,Goal,TimeOut,Constr,OutConstrLst,Res1,Res).
 
 setlogTimeOut_opt(clpq,Goal,TimeOut,Constr,Res) :- !,
-    int_solver(Current),
-    ssolve(int_solver(clpq),[],[]),
+    b_getval(int_solver,Current),    
+    b_setval(int_solver,clpq),       
     time_out(setlog1(Goal,Constr,Res1),TimeOut,Res2),
     check_timeout_res(Res2,Res1,Res),
-    ssolve(int_solver(Current),[],[]).
+    b_setval(int_solver,Current).   
 setlogTimeOut_opt(clpfd,Goal,TimeOut,Constr,Res) :- !,
-    int_solver(Current),
-    ssolve(int_solver(clpfd),[],[]),
+    b_getval(int_solver,Current),    
+    b_setval(int_solver,clpfd),       
     time_out(setlog1(Goal,Constr,Res1),TimeOut,Res2),
     check_timeout_res(Res2,Res1,Res),
-    ssolve(int_solver(Current),[],[]).
+    b_setval(int_solver,Current).    
 setlogTimeOut_opt(final,Goal,TimeOut,Constr,Res) :- !,
     set_final,
     time_out(setlog1(Goal,Constr,Res1),TimeOut,Res2),
@@ -487,10 +494,18 @@ setlogTimeOut_opt(noirules,Goal,TimeOut,Constr,Res) :- !,
     %time_out(setlog2(Goal,Constr,Res1),TimeOut,Res2),
     time_out(setlog1(Goal,Constr,Res1),TimeOut,Res2),
     check_timeout_res(Res2,Res1,Res).
-setlogTimeOut_opt(subset_elim,Goal,TimeOut,Constr,Res) :- !,
-    ssolve(subset_elim,[],[]),
+setlogTimeOut_opt(solver,Goal,TimeOut,Constr,Res) :- !,
+    b_getval(smode,Current),
+    b_setval(smode,solver),
     time_out(setlog1(Goal,Constr,Res1),TimeOut,Res2),
-    check_timeout_res(Res2,Res1,Res).
+    check_timeout_res(Res2,Res1,Res),
+    b_setval(smode,Current).
+setlogTimeOut_opt(prover,Goal,TimeOut,Constr,Res) :- !, 
+    b_getval(smode,Current),
+    b_setval(smode,prover),
+    time_out(setlog1(Goal,Constr,Res1),TimeOut,Res2),
+    check_timeout_res(Res2,Res1,Res),
+    b_setval(smode,Current).
 setlogTimeOut_opt(noneq_elim,Goal,TimeOut,Constr,Res) :- !,
     ssolve(noneq_elim,[],[]),
     time_out(setlog1(Goal,Constr,Res1),TimeOut,Res2),
@@ -521,12 +536,12 @@ setlog(Goal,TimeOut,OutConstrLst,Res) :-
 %%%% (Res = success | time_out | maybe | failure)
 %
 rsetlog(Goal,TimeOut,OutConstrLst,Res,Options) :-   
-	set_default,
-                   nb_setval(sol,no),
-	setlog1(Goal,TimeOut,OutConstrLst,Res,Options),
-                   nb_setval(sol,yes).
+    set_default,
+    nb_setval(sol,no),
+    setlog1(Goal,TimeOut,OutConstrLst,Res,Options),
+    nb_setval(sol,yes).
 rsetlog(_Goal,_TimeOut,_OutConstrLst,failure,_Options) :-
-                   nb_getval(sol,no).
+    nb_getval(sol,no).
 
 %%%% setlog_InOut(+Goal,+InConstraintList,-OutConstraintList)
 %
@@ -775,7 +790,7 @@ h(constraints) :-
     write('        - e1 =< e2 (less or equal), e1 < e2 (less)'), nl,
     write('        - e1 >= e2 (greater or equal), e1 > e2 (greater)'), nl,
     write('        - e1 =:= e2 (equal), e1 =\\= e2 (not equal)'), nl,
-    write('        - integer(n)/ninteger(n) (n isis_not an integer number)'), nl,
+    write('        - integer(n)/ninteger(n) (n is/is_not an integer number)'), nl,
     nl,
     write('   4.  Binary relation and partial function constraints:'), nl,
     write('       (A: variable, set, interval, IS, CP; R, RR: variable, binary relation, CP) '), nl,
@@ -905,7 +920,7 @@ check_lib :-
 %
 solve(Goal_int_ruq,Constr) :-
     transform_goal(Goal_int_ruq,GoalNew),
-%DBG%   nl,write('NEW GOAL: '),write(GoalNew),nl,
+    %DBG nl,write('NEW GOAL: '),write(GoalNew),nl,
     solve_goal_fin(GoalNew,Constr).
 
 %%%% solve_goal_fin(+Goal,-Constraint)   Goal: {log} goal in internal form
@@ -916,7 +931,8 @@ solve_goal_fin(G,ClistNew) :-
 
 solve_goal_fin_constr(GClist,GAlist,ClistNew) :-
     solve_goal_constr(GClist,GAlist,Clist),
-    final_sat(Clist,ClistNew).
+    %final_sat(Clist,ClistNew).
+    final_solve(Clist,ClistNew).    %CCCCCCCCC
 
 %%%% solve_goal(+Goal,-Constraint)       Goal: {log} goal in internal form
 %
@@ -1050,24 +1066,32 @@ ssolve(strategy(Str),[],[]) :- !,  %% change goal atom selection strategy
     retract(strategy(_)),
     assertz(strategy(Str)).
 
-ssolve(int_solver(Slv),[],[]) :-   %% get the current integer solver
+ssolve(int_solver(Slv),[],[]) :-   %% get the current solving mode (solver/prover)
     var(Slv),!,
-    int_solver(Slv).
-ssolve(int_solver(Slv),[],[]) :- !,  %% change the integer solver
-    cond_retract(int_solver(_)),
-    assertz(int_solver(Slv)).
+    b_getval(int_solver,Slv).
+ssolve(int_solver(Slv),[],[]) :-!, %% change the solving moder
+    b_setval(int_solver,Slv).
 
 ssolve(nofinal,[],[]) :- !,        %% deactivate final mode for constraint solving
     cond_retract(final).
 ssolve(final,[],[]) :- !,          %% activate final mode for constraint solving
     set_final.
 
-ssolve(nosubset_elim,[],[]) :- !,  %% deactivate automatic subset elimination
-    cond_retract(subset_elim).
-ssolve(subset_elim,[],[]) :-       %% (re-)activate deactivate automatic subset elimination
-    subset_elim,!.
-ssolve(subset_elim,[],[]) :- !,
-    assertz(subset_elim).
+ssolve(mode(M),[],[]) :-           %% get the current solving mode (solver/prover)
+    var(M),!,
+    b_getval(smode,M).
+ssolve(mode(M),[],[]) :- !,        %% change the solving mode
+    b_setval(smode,M).
+
+ssolve(nofix_size,[],[]) :- !,     %% deactivate fixed set cardinality mode for constraint solving
+    b_setval(fix_size,off).
+ssolve(fix_size,[],[]) :- !,       %% activate fixed set cardinality mode for constraint solving
+    b_setval(fix_size,on).
+                                    
+ssolve(noshow_min,[],[]) :- !,     %% deactivate fixed set cardinality mode for constraint solving
+    b_setval(show_min,off).
+ssolve(show_min,[],[]) :- !,       %% activate fixed set cardinality mode for constraint solving
+    b_setval(show_min,on).
 
 ssolve(A,C,D) :-                   %% program defined predicates
     our_clause(A,B,C1),
@@ -1284,13 +1308,13 @@ get_preconditions1(FifthArg,IPos,INeg,FPos,FNeg) :-
     conj_append(PosPre,IPos,FPos),
     FNeg = (INeg or NegPre).
 
-% preconditions(FP,Neg,Pos)
-% Returns the negation of the preconditions (Neg) of a functional predicate (FP)
+% preconditions(+FP,-Neg,-Pos):
+% returns the negation of the preconditions (Neg) of a functional predicate (FP)
 % and the conjunction of its preconditions (Pos)
-% (In apply, positive precondition is true because apply generates the precondition
-% by itself. I.e. apply(F,X,Y) => pfun(F) & comp({[X,X]},F,{H}))
+% (in apply, the positive precondition is simply 'true' because apply generates 
+% the precondition by itself. I.e., apply(F,X,Y) => pfun(F) & comp({[X,X]},F,{H}))
 %
-preconditions(apply(F,X,_Y), (npfun(F) or comp({} with [X,X],F,{})), true) :-!.
+preconditions(apply(F,X,_Y), (npfun(F) or comp({} with [X,X],F,{})), true) :-!. %i.e., X nin dom(F)
 preconditions(_Z is _X mod Y, Y = 0, Y neq 0) :-!.
 preconditions(_,false,true).
 %TO BE COMPLETED
@@ -1302,24 +1326,23 @@ preconditions(_,false,true).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Intensional sets
 
-solve_SF(S,_GName,PName,VarList,Cin,Cout) :-
+solve_SF(S,GName,PName,VarList,Cin,Cout) :-
+    b_getval(smode,Current),
+    b_setval(smode,solver),
+    solve_SF_cont(S,GName,PName,VarList,Cin,Cout),
+    b_setval(smode,Current).
+solve_SF_cont(S,_GName,PName,VarList,Cin,Cout) :-
     nonvar(S), S = {},!,
     InPred =.. [PName,{}|VarList],
-    check_subset_elim(Ck),
-    solve_goal_fin_constr(Cin,[neg(InPred & true)],Cout),
-    restore_subset_elim(Ck).
+    solve_goal_fin_constr(Cin,[neg(InPred & true)],Cout).
     % print_warning_SF(VarList).
-solve_SF({},_GName,PName,VarList,Cin,Cout) :-
+solve_SF_cont({},_GName,PName,VarList,Cin,Cout) :-
     InPred =.. [PName,{}|VarList],
-    check_subset_elim(Ck),
-    solve_goal_fin_constr(Cin,[neg(InPred & true)],Cout),
-    restore_subset_elim(Ck).
+    solve_goal_fin_constr(Cin,[neg(InPred & true)],Cout).
     % print_warning_SF(VarList).
-solve_SF(S,GName,_PName,VarList,_Cin,Cout) :-
+solve_SF_cont(S,GName,_PName,VarList,_Cin,Cout) :-
     InPred =.. [GName,X|VarList],
-    check_subset_elim(Ck),
     setof(X,solve_goal_fin(InPred,C1),L),
-    restore_subset_elim(Ck),
     list_to_set(L,S,C2),
     append(C2,C1,Cout).
     % print_warning_SF(VarList).
@@ -1328,47 +1351,35 @@ solve_SF(S,GName,_PName,VarList,_Cin,Cout) :-
 %   \+ ground(VarList),!,
 %   print_warning('***WARNING***: uninstantiated free variable in intensional set').   
 
-check_subset_elim(_) :-
-    subset_elim,
-    !.
-check_subset_elim(added) :-
-    assertz(subset_elim).
-
-restore_subset_elim(R) :-
-    var(R),
-    !.
-restore_subset_elim(added) :-
-    retract(subset_elim).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% RUQs
 
-solve_RUQ(S,_,_,C,C) :-
+solve_RUQ(S,InName,VarList,Cin,Cout) :-           
+    b_getval(smode,Current),
+    b_setval(smode,solver),
+    solve_RUQ_cont(S,InName,VarList,Cin,Cout),
+    b_setval(smode,Current).
+solve_RUQ_cont(S,_,_,C,C) :-
     nonvar(S),
     empty_aggr(S),!.
-solve_RUQ(S,InName,VarList,Cin,Cout) :-
+solve_RUQ_cont(S,InName,VarList,Cin,Cout) :-
     nonvar(S), S = int(L,H),!,                % solve RUQ's over intervals
     force_bounds_values(L,H,IntC),
-    check_subset_elim(Ck),
     solve_RUQ_int(int(L,H),InName,VarList,Cin,Cout1),
-    append(IntC,Cout1,Cout),
-    restore_subset_elim(Ck).
-solve_RUQ(S,InName,VarList,Cin,Cout) :-           % over a given aggregate
+    append(IntC,Cout1,Cout).
+solve_RUQ_cont(S,InName,VarList,Cin,Cout) :-           % over a given aggregate
     nonvar(S),!,
     aggr_comps(S,X,R),
     InPred =.. [InName,X|VarList],
-    check_subset_elim(Ck),
     solve_goal_fin_constr(Cin,[InPred],C2),
-    restore_subset_elim(Ck),
-    solve_RUQ(R,InName,VarList,C2,Cout).
-solve_RUQ(S,_,_,C,C) :-
+    solve_RUQ_cont(R,InName,VarList,C2,Cout).
+solve_RUQ_cont(S,_,_,C,C) :-
     var(S), S = {}.
-solve_RUQ(S,InName,VarList,Cin,Cout) :-           % over an unspecified aggregate
+solve_RUQ_cont(S,InName,VarList,Cin,Cout) :-           % over an unspecified aggregate
     var(S), S = R with X,
     InPred =.. [InName,X|VarList],
-    check_subset_elim(Ck),
     solve_goal_fin_constr([X nin R|Cin],[InPred],C2),
-    restore_subset_elim(Ck),
-    solve_RUQ(R,InName,VarList,C2,Cout),
+    solve_RUQ_cont(R,InName,VarList,C2,Cout),
     aggr_ordered(S).
 
 solve_RUQ_int(int(L,L),InName,VarList,Cin,Cout) :- !,
@@ -1378,7 +1389,7 @@ solve_RUQ_int(int(L,H),InName,VarList,Cin,Cout) :-
     InPred =.. [InName,L|VarList],    % forall(X in int(L,H),InName(X,VarList))
     solve_goal_fin_constr(Cin,[InPred],C2),
     L1 is L + 1,
-    solve_RUQ(int(L1,H),InName,VarList,C2,Cout).
+    solve_RUQ_cont(int(L1,H),InName,VarList,C2,Cout).
 
 %%%%%%%%%%%%%% auxiliary predicates for solve_RUQ/5
 
@@ -1577,14 +1588,16 @@ setlog_read(Stream,Term) :-
     catch(read(Stream,Term),Msg,syntax_error_cont_msg(Msg)).
 
 assert_or_solve((:- Goal)) :-
-    !,
-    solve(Goal,_).
+    solve(Goal,_),!.
+assert_or_solve((:- Goal)) :-!,
+    write('WARNING: Goal (directive) failed: '), write(Goal), nl.
 assert_or_solve(Clause) :-
     setassert(Clause).
 
 assert_or_solve((:- Goal),_) :-
-    !,
-    solve(Goal,_).
+    solve(Goal,_),!.
+assert_or_solve((:- Goal),_) :- !,
+    write('WARNING: Goal (directive) failed: '), write(Goal), nl.
 assert_or_solve(Clause,N) :-
     setassert(Clause),
     write('Clause '), write(N), write(' stored'), nl.
@@ -1739,6 +1752,7 @@ atomic_constr(subset(_,_)) :-!.
 atomic_constr(disj(_,_)) :-!.
 atomic_constr(inters(_,_,_)) :-!.
 atomic_constr(ssubset(_,_)) :-!.
+atomic_constr(diff(_,_,_)) :-!.
 
 atomic_constr(delay(_,_)) :-!.
 atomic_constr(solved(_,_,_,_)) :-!.
@@ -1821,12 +1835,16 @@ sat1(C,SFC,F) :-
 sat_cont(R,NewC,SFC,F) :-           %if R=='stop', then no rule has changed the CS in the last
     R == stop,!,                  %call to 'sat_step' (-> fixpoint); otherwise, call 'sat' again
     trace_out(NewC,1),
-    norep_in_list_split(NewC,RedC,RedCS),   %remove possibly repeated constraints in the CS
-                                            %and split the CS into <neq-constraints,other-constraints>
-    trace_in(RedC,2),
+    norep_in_list_split(NewC,RedC,RedCS,Nsize),   %remove possibly repeated constraints in the CS
+    trace_in(RedC,2),                       %and split the CS into <neq-constraints,other-constraints>   
+    (size_solver_on ->                  
+        cond_check_size(RedC,Nsize)
+    ;
+        true
+    ),
     global_check1(RedC,RedCS,RevC1,F),      %rewrite RedC to RevC
     global_check2(RevC1,RedCS,RevC,F),      %rewrite RedC to RevC
-    (   RevC == RedC ->
+    (RevC == RedC ->
         SFC=RevC,     %if RedC==RevC, then no rewriting has been applied:
         trace_out(NewC,2)
     ;                            %RevC is the resulting constraint;
@@ -1835,24 +1853,30 @@ sat_cont(R,NewC,SFC,F) :-           %if R=='stop', then no rule has changed the 
 sat_cont(_R,NewC,SFC,F) :-
     sat1(NewC,SFC,F).
 
-norep_in_list_split([],[],cs([],[])) :-!.
-norep_in_list_split([A|R],S,CS) :-
+%norep_in_list_split(+C,-RedC,-CS,-Nsize)   %true if C is the current constraint store, RedC is C without duplicate constraints,
+                                            %CS is RedC splitted in two lists, NSize is the number of size constraints in C
+norep_in_list_split([],[],cs([],[]),0) :-!.
+norep_in_list_split([A|R],S,CS,Nsize) :-    %remove duplicate elements
     member_strong(A,R),!,
-    norep_in_list_split(R,S,CS).
-norep_in_list_split([A|R],[A|S],cs([A|NeqCS],OtherCS)) :-
+    norep_in_list_split(R,S,CS,Nsize).
+norep_in_list_split([A|R],[A|S],cs([A|NeqCS],OtherCS),Nsize) :-   %move neq constraint to 1st list of CS
     A = (_ neq _),!,
-    norep_in_list_split(R,S,cs(NeqCS,OtherCS)).
-norep_in_list_split([A|R],[A|S],cs([A|NeqCS],OtherCS)) :-
+    norep_in_list_split(R,S,cs(NeqCS,OtherCS),Nsize).
+norep_in_list_split([A|R],[A|S],cs([A|NeqCS],OtherCS),Nsize) :-   %move type constraint to 1st list of CS
     type_constr(A),!,
-    norep_in_list_split(R,S,cs(NeqCS,OtherCS)).
-norep_in_list_split([A|R],[A|S],cs([A|NeqCS],OtherCS)) :-
+    norep_in_list_split(R,S,cs(NeqCS,OtherCS),Nsize).
+norep_in_list_split([A|R],[A|S],cs([A|NeqCS],OtherCS),Nsize) :-   %move glb_state constraint to 1st list of CS
     A = glb_state(_),!,
-    norep_in_list_split(R,S,cs(NeqCS,OtherCS)).
-norep_in_list_split([A|R],[A|S],cs(NeqCS,[A|OtherCS])) :-
-    norep_in_list_split(R,S,cs(NeqCS,OtherCS)).
+    norep_in_list_split(R,S,cs(NeqCS,OtherCS),Nsize).
+norep_in_list_split([A|R],[A|S],cs(NeqCS,[A|OtherCS]),Nsize) :-   %count size constraints
+    is_size(A,_,_,_),!,
+    norep_in_list_split(R,S,cs(NeqCS,OtherCS),Nsize1),
+    Nsize is Nsize1+1.
+norep_in_list_split([A|R],[A|S],cs(NeqCS,[A|OtherCS]),Nsize) :-   %move all other constraints to 2nd list of CS
+    norep_in_list_split(R,S,cs(NeqCS,OtherCS),Nsize).
 
 split_cs([],cs([],[])) :-!.                    %split the CS into <neq-constraints,other-constraints>
-split_cs([A|R],cs([A|NeqCS],OtherCS)) :-
+split_cs([A|R],cs([A|NeqCS],OtherCS)) :-       %(called by filter_and_check)
     (   A = (_ neq _) ->
         true
     ;
@@ -1877,6 +1901,7 @@ sat_step([],[],stop,_F) :- !.
 sat_step([C1|R1],R2,Z,F) :-
     sat_step(C1,[C1|R1],R2,Z,F).
 
+%%%%%%%%%%%%%             % global state constraints (for internal use only)
 sat_step(glb_state(Rel),[glb_state(Rel)|R1],R2,Stop,F) :-
     (   ground(Rel) ->
         true
@@ -1913,6 +1938,9 @@ sat_step(inters(X,Y,W),[inters(X,Y,W)|R1],R2,Z,F) :- !,
     sat_inters([inters(X,Y,W)|R1],R2,Z,F).
 sat_step(disj(X,Y),[disj(X,Y)|R1],R2,Z,F) :- !,
     sat_disj([disj(X,Y)|R1],R2,Z,F).
+sat_step(diff(X,Y,W),[diff(X,Y,W)|R1],R2,Z,F) :- !,
+    sat_diff([diff(X,Y,W)|R1],R2,Z,F).
+%%%%%%%%%%%%%             % aggregate constraints
 sat_step(size(X,Y),[size(X,Y)|R1],R2,Z,F) :- !,
     sat_size([size(X,Y)|R1],R2,Z,F).
 sat_step(sum(X,Y),[sum(X,Y)|R1],R2,Z,F) :- !,
@@ -1927,8 +1955,6 @@ sat_step(nun(X,Y,W),[nun(X,Y,W)|R1],R2,Z,F) :- !,
 sat_step(ndisj(X,Y),[ndisj(X,Y)|R1],R2,Z,F) :- !,
     sat_ndisj([ndisj(X,Y)|R1],R2,Z,F).
 %%%%%%%%%%%%%             % type constraints
-%sat_step(type(TypeC),[type(TypeC)|R1],R2,Z,F) :- !,    % type(C), where C is a type constraint,
-%   sat_step([TypeC|R1],R2,Z,F).                % is dealt with as C, but it is not printed when listing a program
 sat_step(set(X),[set(X)|R1],R2,Z,F) :- !,
     sat_set([set(X)|R1],R2,Z,F).
 sat_step(integer(X),[integer(X)|R1],R2,Z,F) :-!,
@@ -2004,7 +2030,6 @@ sat_step(apply(S,X,Y),[apply(S,X,Y)|R1],R2,Z,F) :- !,
     sat_apply([apply(S,X,Y)|R1],R2,Z,F).
 sat_step(oplus(S,R,T),[oplus(S,R,T)|R1],R2,Z,F) :- !,
     sat_oplus([oplus(S,R,T)|R1],R2,Z,F).
-
 %%%%%%%%%%%%%             % binary relation and partial function negative constraints
 sat_step(npfun(X),[npfun(X)|R1],R2,Z,F) :- !,
     sat_npfun([npfun(X)|R1],R2,Z,F).
@@ -2035,14 +2060,9 @@ sat_step(noplus(A,R,S),[noplus(A,R,S)|R1],R2,Z,F) :- !,
     sat_noplus([noplus(A,R,S)|R1],R2,Z,F).
 sat_step(nid(X,Y),[nid(X,Y)|R1],R2,Z,F) :- !,
     sat_nid([nid(X,Y)|R1],R2,Z,F).
-
 %%%%%%%%%%%%%             % foreach and nforeach
-%sat_step(foreach(_,_),[foreach(D,Fo)|R1],R2,Z,F) :- !,
-%   sat_foreach2([foreach(D,Fo)|R1],R2,Z,F).
 sat_step(foreach(_,_,_,_),[foreach(D,P,Fo,FP)|R1],R2,Z,F) :- !,
     sat_foreach4([foreach(D,P,Fo,FP)|R1],R2,Z,F).
-%sat_step(nforeach(_,_),[nforeach(D,Fo)|R1],R2,Z,F) :- !,
-%   sat_nforeach2([nforeach(D,Fo)|R1],R2,Z,F).
 sat_step(nforeach(_,_,_,_),[nforeach(D,P,Fo,FP)|R1],R2,Z,F) :- !,
     sat_nforeach4([nforeach(D,P,Fo,FP)|R1],R2,Z,F).
 
@@ -2061,7 +2081,7 @@ trace_out(_C,L) :-
     trace(sat),
     !,
     write('<<< Level '), write(L), write(' fixed point reached'),nl,
-%DBG% write('<<< Output constraint: '), write(C),nl,
+    %DBG write('<<< Output constraint: '), write(C),nl,
     nl.
 trace_out(_,_).
 
@@ -2082,6 +2102,18 @@ trace_ffrules(Rule) :-
     !,
     write('\n>>> Using filtering fail rule '), write(Rule),nl.
 trace_ffrules(_).
+
+load_size_solver :-                            
+    size_solver_file(Size_solver_file),
+    mk_file_name(Size_solver_file,FullName),
+    (exists_file(FullName) ->
+        consult(FullName),
+        assertz(size_solver_on)
+    ;
+        size_solver_file(Size_solver_file),
+        write('No advanced size solver loaded (file '''),
+        write(Size_solver_file), write(''')'), nl
+    ).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2442,12 +2474,14 @@ ris_term(T,ris(CE_Dom,LVars,Fl,P,PP)) :-
     nonvar(T),
     T = ris(CE_Dom,LVars,Fl,P,PP).
 
-var_ris(Ris) :-
-    var(Ris),
+var_ris(D) :-       % var_ris(D): true if D is the domain of a variable-RIS
+    var(D),
     !.
-var_ris(Ris) :-       % not well supported yet
-    ris_term(Ris,ris(_ in Dom,_,_,_,_)),!,
+var_ris(D) :-       % not well supported yet
+    ris_term(D,ris(_ in Dom,_,_,_,_)),!,
     var_ris(Dom).
+var_ris(D) :-
+    open_intv(D).  
 
 nonvar_ris(Ris) :-
     nonvar(Ris), \+ris_term(Ris),!.
@@ -2489,10 +2523,71 @@ ctrl_expr([X0|Y0],V,[X0,Y0|V],[_X|_Y]) :-   %NewVList is the list of vars in CT 
     var(X0), var(Y0),!.                  %NewCT is CT with all its variable renamed
 ctrl_expr([X0,Y0],V,[X0,Y0|V],[_X,_Y]) :-   %e.g., ctrl_expr([X|Y],[Z],LV,R) --> LV = [X,Y,Z], R=[N1|N2]
     var(X0), var(Y0), !.
+%%% NEW MAXI
+% The new code checks that: +CT is a nested closed list.
+% +CT is a closed list: if it's a variable, or is a list
+% whose first element and rest are closed lists. That is
+% a close list is not of the form [X|R] with R variable.
+% For example: [[X,Y],W,[Q,[T,R]]] is a closed list.
+%
+% Does it make sense to allow the same variable in different positions
+% of the control term?
+% For instance, [X,X] would mean that it won't unify with [1,2] but
+% only with [1,1] or [2,2]. I gues there will be a problem if the 
+% elements of the domain are pairs of sets. For example, [{1},{2}] 
+% shouldn't unify with [X,X]. But what happens if the element is
+% [{V},{W}]? Since we use syntatic unification it won't unify with [X,X]
+% but we know that it unifies if V=W.
+%
+% So, my conclussion is that we shouldn't allow the same variable in
+% different positions of the control expression because we may have
+% problems. In fact, the whole idea is for control expression to define
+% the expected structure or form of the elements of the domain, and not
+% to stablish semantic properties such as set equality.
+%
+% Besides if the user wants a set whose elements are of the form [X,X]
+% he can use [X,Y] as the control term and then ask for X=Y in the 
+% filter which uses semantic unification.
+%
+% However, my code doesn't control that all variables are different.
+% We should check that all variables in -NewVList are different (because
+% all variables in the control term must be different from the
+% variables declared as parameters). I guess we can implement a 
+% predicate all_different; maybe you already have one or there's one
+% in the standard library.
+% TODO !!
+/*ctrl_expr([X0],V,[X0|V],[_X0]) :-   
+    var(X0),!.
+   
+ctrl_expr([X0],V,NV,NCT) :-   
+    nonvar(X0),X0 = [_|_],!,
+    append(V,VX0,NV),
+    NCT = [NCT0],
+    ctrl_expr(X0,[],VX0,NCT0).
+
+ctrl_expr([X0|Y0],V,NV,NCT) :-
+    var(X0),nonvar(Y0),Y0 = [_|_],!,
+    V0=[X0|V],append(V0,VY0,NV),
+    NCT = [_X0|NCT1],
+    ctrl_expr(Y0,[],VY0,NCT1).
+   
+ctrl_expr([X0|Y0],V,NV,NCT) :-   
+    nonvar(X0),X0 = [_|_],nonvar(Y0),Y0=[Y],var(Y),!,
+    append(V,VX0,NV1),NV = [Y|NV1],
+    NCT=[NCTX0|[_Y]],!,
+    ctrl_expr(X0,[],VX0,NCTX0).
+
+ctrl_expr([X0|Y0],V,NV,NCT) :-  
+    nonvar(X0),X0 = [_|_],nonvar(Y0),Y0=[_|_],!,
+    append(V,NVX,NV0),append(NV0,NVY,NV),
+    NCT=[NCTX|NCTY], 
+    ctrl_expr(X0,[],NVX,NCTX),!,
+    ctrl_expr(Y0,[],NVY,NCTY).
+%%% END NEW MAXI*/
 ctrl_expr(Y0 with X0,V,[X0,Y0|V],_Y with _X) :-
     var(X0), var(Y0).
 
-%get_rest(+S,+X,-R,-C)                   
+%get_rest(+S,?X,-R,-C)                   
 get_rest(S,X,R,C) :-                  % same as first_rest(S,X,R,C)  OR 
     first_rest(S,X,R,C),!.        % S is a set and X is not its first component,
 get_rest(R with _,_,R,_).             % R is S without its first component and C is an unbound var.
@@ -2624,10 +2719,10 @@ var_st(X) :-
     !.
 var_st(X) :-
     X = cp(X1,X2),
-    (   var(X1) ->
+    (var_st(X1) ->
         true
     ;
-        var(X2)
+        var_st(X2)
     ).
 
 not_cp(T) :-
@@ -2637,7 +2732,7 @@ not_cp(T) :-
     T \= cp(_,_).
 
 one_cp(S1,S2,S3) :-
-    (   nonvar(S1), S1 = cp(_,_) ->
+    (nonvar(S1), S1 = cp(_,_) ->
         true
     ;
         nonvar(S2), S2 = cp(_,_) ->
@@ -2649,7 +2744,7 @@ one_cp(S1,S2,S3) :-
 %cp_component(X,CP): true if X is one of the components of CP
 cp_component(X,CP) :-
     CP = cp(A,B),
-    (   A==X ->
+    (A==X ->
         true
     ;
         B==X
@@ -2657,7 +2752,7 @@ cp_component(X,CP) :-
 %
 %cp_component(X,CP1,CP2): true if X is one of the components of either CP1 or CP2
 cp_component(X,CP1,CP2) :-
-    (   cp_component(X,CP1) ->
+    (cp_component(X,CP1) ->
         true
     ;
         cp_component(X,CP2)
@@ -2671,7 +2766,7 @@ samevarcp(X,Y) :-
 %
 %samevarcp(X,Y,Z): true if X and either Y or Z are the same variable CP
 samevarcp(X,Y,Z) :-
-    (   samevarcp(X,Y) ->
+    (samevarcp(X,Y) ->
         true
     ;
         samevarcp(X,Z)
@@ -2683,8 +2778,42 @@ tail_cp(X,T) :-
 tail_cp(X,T) :-
     tail(X,T).
 
+%%% this definition of gcp_to_set/2 can be improved
+%%% because it doesn't convert a CP such as cp({A},{1})
+%%% which could be easily converted into an extensional set.
+%%% The case that can't be converted is cp({a/X},{1})
+%
 gcp_to_set(R,R) :-     %gcp_to_set(R,S): if R is not a ground CP, S is R; otherwise S is the
-    var(R),!.       %extensional set corresponding to the cp R
+    var(R),!.          %extensional set corresponding to the cp R
+gcp_to_set(R,S) :-
+    R = cp(A,B),
+    nonvar(A), A = cp(_,_),
+    nonvar(B), B = cp(_,_),!,
+    gcp_to_set(A,S1),
+    gcp_to_set(B,S2),
+    ((A == S1 -> true ; B == S2) ->    
+        S = R             %A or B couldn't be converted
+    ;
+        g_cp(S1,S2,S)
+    ).
+gcp_to_set(R,S) :-
+    R = cp(A,B),
+    nonvar(A), A = cp(_,_),!,
+    gcp_to_set(A,S1),
+    (A == S1 -> 
+        S = R             % A couldn't be converted
+    ;
+        g_cp(S1,B,S)
+    ).
+gcp_to_set(R,S) :-
+    R = cp(A,B),
+    nonvar(B), B = cp(_,_),!,
+    gcp_to_set(B,S2),
+    (B == S2 ->
+         S = R            % B couldn't be converted
+    ;
+         g_cp(A,S2,S)
+    ).
 gcp_to_set(R,S) :-
     R = cp(A,B),
     ground(A),ground(B),!,
@@ -3499,8 +3628,8 @@ sat_eeq([X is E|R1],R2,c,F) :-        % integer equality (is/2)
 sat_eeq([X is E|R1],R2,c,F) :-        % integer equality
     simple_integer_expr(X),      % to catch type errors within {log}
     integer_expr(E),
-    solve_int(X is E,IntC1),
-    allintvars(X is E,IntC2),
+    allintvars(X is E,IntC2),     
+    solve_int(X is E,IntC1),      
     append(IntC1,IntC2,IntC),
     append(IntC,R1,Newc),
     sat_step(Newc,R2,_,F).
@@ -3567,11 +3696,20 @@ sat_in_v([T in X|R1],R2,c,F) :-               % t in X, set only
     other_aggrs(off),!,
     sunify(X,N with T,C1),
     append(C1,R1,R3),
-    sat_set([set(N)|R3],R2,_,F).
+    (b_getval(smode,solver) ->
+         sat_step([T nin N,set(N)|R3],R2,_,F)
+     ;
+         sat_step([set(N)|R3],R2,_,F)
+    ).
+
 sat_in_v([T in X|R1],R2,c,F) :-               % t in X, set
     sunify(X,N with T,C1),
     append(C1,R1,R3),
-    sat_set([set(N)|R3],R2,_,F).
+    (b_getval(smode,solver) ->
+         sat_step([T nin N,set(N)|R3],R2,_,F)
+     ;
+         sat_step([set(N)|R3],R2,_,F)
+    ).
 sat_in_v([T in X|R1],R2,c,F) :-               % t in X, multiset
     sunify(X,N mwith T,_),
     sat_bag([bag(N)|R1],R2,_,F).
@@ -3767,78 +3905,161 @@ sat_nin_cp([T nin _I|R1],R2,c,F) :-          % cp: T nin cp(...)  (npair(T))
 
 %%%%%%%%%%%%%%%%%%%%%% subset (subset/2)
 
-%solved form: subset(S1,S2), var(S1) & \+subset_elim & \+nonvar_is_empty(S2)
-%             or nonvar(S1) & open_intv(S1)
-%
-sat_sub([subset(S1,S2)|R1],[subset(S1,S2)|R2],Stop,nf) :-     % subset(X,s), var X: nf-irreducible form
-    var(S1),
-    \+ subset_elim,
+%solved form: subset(S1,S2): smode(prover) & var(S1) & S1 \== S2 & \+nonvar_is_empty(S2) & 
+%                            or
+%                            var(S1) & open_intv(S2) 
+%                            or 
+%                            open_intv(S1)
+
+sat_sub([subset(S1,S2)|R1],[subset(S1,S2)|R2],Stop,nf) :-     
+    var(S1),                                          % subset(X,s), var X: nf-irreducible form
+    b_getval(smode,prover),
     \+ nonvar_is_empty(S2),
     !,
     sat_step(R1,R2,Stop,nf).
 
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % subset(s,s)
-    S1 == S2,
-    !,
+sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % subset(s,s), s any aggr_term
+    S1 == S2, !,
     sat_step(R1,R2,_,F).
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % ground case: subset(s1,s2), ground s1,s2
+
+sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % subset(s,{}), s any aggr_term  (2) (4)
+    nonvar(S2), is_empty(S2),!,
+    sunify(S1,{},C1),append(C1,R1,R3),
+    sat_step(R3,R2,_,F).
+
+sat_sub([subset(S1,_S2)|R1],R2,c,F) :-                % subset({},s), s any aggr_term  (1) (8)
+    nonvar(S1), is_empty(S1),!, 
+    sat_step(R1,R2,_,F).
+
+sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % ground case: subset(s1,s2), ground s1,s2, s1 and s2 any non-empty set_term
     ground(S1), ground(S2),
     set_term(S1), set_term(S2),!,
     g_subset(S1,S2),
     sat_step(R1,R2,_,F).
 
-sat_sub([subset(S1,S2)|R1],[subset(S1,S2)|R2],Stop,F) :- % subset(int(A,B),s) (open interval --> irreducible)
-    nonvar(S1), open_intv(S1),!,                    % <======  to be improved
-    sat_step(R1,R2,Stop,F).
-sat_sub([subset(S1,S2)|R1],[subset(S1,S2)|R2],Stop,F) :- % subset(s,int(A,B)) (open interval --> irreducible)
-    nonvar(S2), open_intv(S2),!,
+sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % subset(cp(...),int(t1,t2)), t1,t2 any integer term with t1 =< t2
+    cp_term(S1),int_term(S2),!,                                  
+    sat_step([S1={}|R1],R2,_,F).
+sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % subset(int(t1,t2),cp(...)), t1,t2 any integer term with t1 =< t2
+    int_term(S1),cp_term(S2),!,                                 
+    sat_step([S1={}|R1],R2,_,F).
+
+sat_sub([subset(S1,S2)|R1],[subset(S1,S2)|R2],Stop,F) :-  % subset(X,int(A,B)), X var or var-ris  (9)   
+    var_ris_st(S1), nonvar(S2), open_intv(S2),!,          % irreducible in both mode(solver) and mode(prover)
     sat_step(R1,R2,Stop,F).
 
-sat_sub([subset(S1,I2)|R1],R2,c,F) :-                 % subset(X,int(a,b)), var X
-    subset_elim,
-    var(S1), closed_intv(I2,_,_),
-    !,
-    (   S1 = {},
-        sat_step(R1,R2,_,F)
+sat_sub([subset(S1,S2)|R1],[subset(S1,S2)|R2],Stop,F) :-  % subset(X,Y), X, Y X var or var-ris or var-cp 
+    %var(S1),var(S2),!,                                    % irreducible in both mode(solver) and mode(prover)
+    var_ris_st(S1), var_ris_st(S2),!,    %NEW
+    sat_step(R1,R2,Stop,F).
+
+sat_sub([subset(S1,S2)|R1],R2,c,f) :-                 % special case - subset(X,{.../X}), X var
+%    b_getval(smode,solver),                           
+    var(S1),
+    nonvar(S2), S2 = _ with _,
+    tail_cp(S2,TS2), samevar(S1,TS2),!,  
+    sat_step(R1,R2,_,f).  
+                
+sat_sub([subset(S1,S2)|R1],R2,c,f) :-                 % subset(X,{...}), X var 
+    b_getval(smode,solver),                           % rewritten in mode(solver)  
+    var(S1), 
+    nonvar(S2), S2 = B with X,!,
+    (sunify(S1,N with X,R),
+     append(R,R1,R3),
+     sat_nin([X nin N,subset(N,B)|R3],R2,_,f)    
     ;
-        S1 = _R with X,
-        sat_step([X in I2,subset(S1,setlog_term(I2))|R1],R2,_,F)
-    ).
-sat_sub([subset(S,I)|R1],R2,c,F) :-                   % subset({...},setlog_term(int(L,H)))
-    nonvar(I), I = setlog_term(I2),!,           % for internal use only
-    S = S1 with Z,
-    (   S1 = {},
-        sat_step([Z in I2|R1],R2,_,F)
-    ;
-        S1 = _R with X,
-        sat_step([Z in I2,X in I2,X > Z,subset(S1,I)|R1],R2,_,F)
-    ).
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % subset(X,S2), var X - subset_elim
-    subset_elim,
+     sat_nin([X nin S1,subset(S1,B)|R1],R2,_,f)
+    ).                
+sat_sub([subset(S1,S2)|R1],R2,c,f) :-                 % subset(X,s), X var or var-ris or var-cp, s any non-empty aggr_term  
+    b_getval(smode,solver),                           % rewritten in mode(solver)  
     var_ris_st(S1),!,
-    sat_step([un(S1,S2,S2)|R1],R2,_,F).
+    sat_un([un(S1,S2,S2)|R1],R2,_,f).                  
 
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % subset(s,{})
-%   var_ris_st(S1),
-    nonvar(S2), is_empty(S2),!,
-    sunify(S1,{},C1),append(C1,R1,R3),
-    sat_step(R3,R2,_,F).
-
-sat_sub([subset(R,S)|R1],[subset(R,S)|R2],Stop,F) :-  % subset(X,s), var X: irreducible form
-    var_ris_st(R),!,
-    %write('subset(X,s), var X'),nl,
+sat_sub([subset(R,S)|R1],[subset(R,S)|R2],Stop,F) :-  % subset(X,s), X var or var-ris or var-cp, s any non-empty aggr_term  (3) (9)
+    var_ris_st(R),!,                                  % irreducible in mode(prover)
+    %DBG write('subset(X,s), var X'),nl,
     sat_step(R1,R2,Stop,F).
 
-sat_sub([subset(S1,_S2)|R1],R2,c,F) :-                % subset({},s)
-    is_empty(S1),!,
-    %write('subset({},s)'),nl,
-    sat_step(R1,R2,_,F).
+sat_sub([subset(S1,S2)|R1],R2,R,F) :-                 % subset(int(t1,t2),s2) or subset(s1,int(t1,t2)) or subset(int(t1,t2),int(u1,u2))
+    (int_term(S1) -> true ; int_term(S2)),            % s1,s2 any non-empty aggr_term; t1,t2,u1,u2 any integer term with t1 =< t2 and u1 =< u2
+    !,
+    sat_sub_intv([subset(S1,S2)|R1],R2,R,F).
 
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                % subset(ris(...),s), s any term (including RIS)
+sat_sub([subset(R with X,S)|R1],R2,c,F) :-            % subset({...},X), X var or var-ris or var-cp (5)
+    var_ris_st(S),!,
+    sunify(S,N with X,C1),
+    append(C1,R1,R3),
+    sat_sub([subset(R,N with X),set(N)|R3],R2,_,F).   
+
+sat_sub([subset(S1,S2)|R1],R2,R,F) :-                 % subset(ris(...),s2) or subset(s1,ris(...)) or subset(ris(...),ris(...))
+    (ris_term(S1) -> true ; ris_term(S2)),            % s1,s2 any non-empty aggr_term
+    !, 
+    sat_sub_ris([subset(S1,S2)|R1],R2,R,F).
+
+sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % (special cases) subset({...|X},{...|X})
+    tail_cp(S1,TS1), tail_cp(S2,TS2),                 % or subset({...|X},cp({...|X},B) or subset({...|X},cp(A,{...|X})
+    samevar(TS1,TS2),!,                               % or subset(cp({...|X},B),{...|X}) or subset(cp(A,{...|X}),{...|X})
+    sat_un([un(S1,S2,S2)|R1],R2,_,F).                 
+
+sat_sub([subset(S1,S2)|R1],R2,R,F) :-                 % subset(cp(...),s2) or subset(s1,cp(...)) or subset(cp(...),cp(...))
+    (cp_term(S1) -> true ; cp_term(S2)),              % s1,s2 any non-empty aggr_term
+    !,
+    sat_sub_cp([subset(S1,S2)|R1],R2,R,F).           
+
+sat_sub([subset(R with X,S with Y)|R1],R2,c,F) :- !,
+    (   sunify(X,Y,C1),                               % subset({...},{...})   (6)
+        append(C1,R1,R3),
+        sat_sub([subset(R,S with Y)|R3],R2,_,F)       
+    ;
+        sat_neq([X neq Y,X in S,subset(R,S with Y)|R1],R2,_,F)      
+    ).
+
+sat_sub(_R1,_R2,_C,_F) :-                             % otherwise            
+    other_aggrs(off),!,        
+    throw(setlog_excpt('unexpected case in constraint subset/2')). 
+
+%%% intervals
+
+sat_sub_intv([subset(S1,S2)|R1],[subset(S1,S2)|R2],Stop,F) :-  % irreducible
+    nonvar(S1), open_intv(S1),!,                     % subset(int(A,B),s), int(A,B) open interval, s any aggr_term: irreducible                
+    sat_step(R1,R2,Stop,F).
+
+sat_sub_intv([subset(S1,S2)|R1],R2,c,F) :-           % subset({...},int(t1,t2)), t1,t2 var or integer constant with t1 =< t2   (10)
+    nonvar(S1), S1 = A with X,!,      
+    nonvar(S2), S2 = int(M,N),
+    sat_integer([integer(X),integer(M),integer(N),M =< X,X =< N,subset(A,S2),set(A)|R1],R2,_,F).
+
+sat_sub_intv([subset(S1,S2)|R1],R2,R,F) :-           % subset(ris(...),int(t1,t2)), t1,t2 any integer term with t1 =< t2
     ris_term(S1),!,
-    sat_step([un(S1,S2,S2)|R1],R2,_,F).
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                % special rule for RIS-RUQ
-    ris_term(S2,ris(CE_Dom,V,Fl,P,PP)),         % subset(s,ris(X in s,V,F,X,PP)), s any term (including RIS)
+    sat_sub_ris([subset(S1,S2)|R1],R2,R,F).        
+
+sat_sub_intv([subset(I,I2)|R1],R2,R,F) :-            % subset(int(l,h),s), int(l,h) non-empty closed interval
+    closed_intv(I,_,_),!,
+    sat_sub_cint([subset(I,I2)|R1],R2,R,F).
+
+sat_sub_intv(_R1,_R2,_C,_F) :-                       % otherwise            
+    throw(setlog_excpt('unexpected case in constraint subset/2')). 
+
+sat_sub_cint([subset(I,I2)|R1],R2,c,F) :-            % subset(int(l1,h1),int(l2,h2))
+    I=int(L,H), closed_intv(I2,L2,H2),!,
+    L2 =< L, H2 >= H,
+    sat_step(R1,R2,_,F).
+sat_sub_cint([subset(I,S2)|R1],R2,c,F) :-            % subset(int(l,l),s), s any agg_term (no interval)
+    I=int(L,H), L==H, !,
+    sat_in([L in S2|R1],R2,_,F).
+sat_sub_cint([subset(I,S2)|R1],R2,c,F) :-            % subset(int(l,h),s), s any agg_term (no interval)
+    I = int(L,H),
+    L1 is L +   1,
+    sat_in([L in S2,subset(int(L1,H),S2)|R1],R2,_,F).
+
+%%% RIS
+
+sat_sub_ris([subset(S1,S2)|R1],R2,c,F) :-            % subset(ris(...),s), s any non-empty aggr_term (including RIS; no intv)
+    ris_term(S1),!,
+    sat_un([un(S1,S2,S2)|R1],R2,_,F).
+
+sat_sub_ris([subset(S1,S2)|R1],R2,c,F) :-            % special rule for RIS-RUQ
+    ris_term(S2,ris(CE_Dom,V,Fl,P,PP)),              % subset(s,ris(X in s,V,F,X,PP)), s any non-empty aggr_term (including RIS)
     CE_Dom = (CtrlExpr in Dom),
     CtrlExpr == P,
     nonvar(S1), 
@@ -3851,68 +4072,38 @@ sat_sub([subset(S1,S2)|R1],R2,c,F) :-                % special rule for RIS-RUQ
          chvar(LV,[],Vars,[Fl,P,PP,CtrlExpr],[],VarsNew,[FlNew,PNew,PPNew,_]),
      find_corr_list(CtrlExpr,CtrlExprNew,Vars,VarsNew),
      get_preconditions(PPNew,PosPre,_),
-
+     %
      solve_expression(Z,PNew),
      conj_append(PosPre,FlNew,PreFlNew),
      mk_atomic_constraint(PreFlNew,FlNewD),
      mk_atomic_constraint(PPNew,PPNewD),
-
+     %
      CtrlExprNew = Z,                 
      sat_step([FlNewD,PPNewD,subset(A,ris(CtrlExpr in A,V,Fl,CtrlExpr,PP))|R3],R2,_,F)
         ;
-     sat_step([subset(S1,ris(CtrlExpr in A,V,Fl,CtrlExpr,PP))|R1],R2,_,F)  
+     sat_sub([subset(S1,ris(CtrlExpr in A,V,Fl,CtrlExpr,PP))|R1],R2,_,F)  
         ).
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                % subset(s,ris(...)), s any term (including RIS)
-    ris_term(S2),!,                    
-    sat_step([un(S1,S2,S2)|R1],R2,_,F).
 
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                % subset(cp(...),s), s any term (including CP)
-    nonvar(S1), S1 = cp(_,_),!,
-    sat_step([un(S1,S2,S2)|R1],R2,_,F).
+sat_sub_ris([subset(S1,S2)|R1],R2,c,F) :-            % subset({...},ris(...))
+    ris_term(S2),!,              
+    sat_un([un(S1,S2,S2)|R1],R2,_,F).
 
-sat_sub([subset(R with X,I2)|R1],R2,c,F) :-           % subset({...},int(a,b))
-    closed_intv(I2,_,_),!,
-    sat_step([X in I2,subset(R,I2)|R1],R2,_,F).
+sat_sub_ris(_R1,_R2,_C,_F) :-                        % otherwise            
+    throw(setlog_excpt('unexpected case in constraint subset/2')). 
 
-sat_sub([subset(S1,S2)|R1],R2,c,F) :-                 % (special cases) subset({...|X},{...|X})
-    tail_cp(S1,TS1), tail_cp(S2,TS2),           % or subset({...|X},cp({...|X},B) or subset({...|X},cp(A,{...|X})
-    samevar(TS1,TS2),!,
-    sat_step([un(S1,S2,S2)|R1],R2,_,F).
+%%% CP
 
-sat_sub([subset(R with X,S)|R1],R2,c,F) :-            % subset({...},S), S var or variable-CP
-    var_st(S),!,
-    sunify(S,N with X,C1),
-    append(C1,R1,R3),
-    sat_step([subset(R,N with X),set(N)|R3],R2,_,F).
-sat_sub([subset(R with X,S)|R1],R2,c,F) :-            % subset({...},cp(...))
+sat_sub_cp([subset(S1,S2)|R1],R2,c,F) :-             % subset(cp(...),s), s any non-empty aggr_term (including CP; no intv, no RIS)
+    S1 = cp(_,_),!,
+    sat_un([un(S1,S2,S2)|R1],R2,_,F).
+
+sat_sub_cp([subset(R with X,S)|R1],R2,c,F) :-        % subset({...},cp(...))
     nonvar(S),S = cp(_,_),!,
-    sat_step([X in S,subset(R,S)|R1],R2,_,F).
-sat_sub([subset(R with X,S with Y)|R1],R2,c,F) :- !,
-    (   sunify(X,Y,C1),                            % subset({...},{...})
-        append(C1,R1,R3),
-        sat_step([subset(R,S with Y)|R3],R2,_,F)
-    ;
-        sat_step([X neq Y,X in S,subset(R,S with Y)|R1],R2,_,F)
-    ).
+    sat_in([X in S,subset(R,S)|R1],R2,_,F).
 
-sat_sub([subset(I,I2)|R1],R2,R,F) :-                  % subset(int(l,h),s) (closed interval)
-    closed_intv(I,_,_),!,
-    sat_sub_cint([subset(I,I2)|R1],R2,R,F).
+sat_sub_cp(_R1,_R2,_C,_F) :-                         % otherwise            
+    throw(setlog_excpt('unexpected case in constraint subset/2')). 
 
-sat_sub_cint([subset(I,_)|R1],R2,c,F) :-              % subset(int(l,h),s), with l>h
-    I=int(L,H), L>H,!,
-    sat_step(R1,R2,_,F).
-sat_sub_cint([subset(I,I2)|R1],R2,c,F) :-             % subset(int(l1,h1),int(l2,h2))
-    I=int(L,H), closed_intv(I2,L2,H2),!,
-    L2 =< L, H2 >= H,
-    sat_step(R1,R2,_,F).
-sat_sub_cint([subset(I,S2)|R1],R2,c,F) :-             % subset(int(l,l),s), s not interval
-    I=int(L,H), L==H, !,
-    sat_step([L in S2|R1],R2,_,F).
-sat_sub_cint([subset(I,S2)|R1],R2,c,F) :-             % subset(int(l,h),s), s not interval
-    I = int(L,H),
-    L1 is L +   1,
-    sat_step([L in S2,subset(int(L1,H),S2)|R1],R2,_,F).
 
 %%%%%%%%%%%%%%%%%%%%%% strict subset (ssubset/2)
 
@@ -3922,35 +4113,63 @@ sat_ssub([ssubset(S1,S2)|R1],R2,c,F) :-
 
 %%%%%%%%%%%%%%%%%%%%%% intersection (inters/3)
 
-%solved form: inters(S1,S2,S3), one_var(S1,S2) & var(S3) & S1 \== S2
-%             & \+nonvar_is_empty(S1) & \+nonvar_is_empty(S2)
-%
+%solved form: inters(S1,S2,S3): (smode(prover) & one_var(S1,S2) or smode(solver) & var(S1) & var(S2)) &
+%                               var(S3) & 
+%                               S1 \== S2 & \+nonvar_is_empty(S1) & \+nonvar_is_empty(S2)
+
 sat_inters([inters(S1,S2,S3)|R1],[inters(S1,S2,S3)|R2],Stop,nf) :-  % inters(S1,S2,S3) nf-irreducible form
      one_var(S1,S2),var(S3),!,
      sat_step(R1,R2,Stop,nf).
 
-sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-       % inters(S,S,S)
+sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-       % inters(S1,S1,S3)
     S1 == S2,!,
     sunify(S1,S3,C),
     append(C,R1,R3),
     sat_step(R3,R2,_,F).
 
-sat_inters([inters(_S1,S2,S3)|R1],R2,c,F) :-      % ground empty-set/empty-interval:
-    nonvar(S2), is_empty(S2),!,             % (case i) inters(t1,empty,t2) or
+sat_inters([inters(_S1,S2,S3)|R1],R2,c,F) :-      % empty-set/empty-interval:
+    nonvar(S2), is_empty(S2),!,                   % (case i) inters(S1,{},S3) 
     sunify(S3,{},C),
     append(C,R1,R3),
     sat_step(R3,R2,_,F).
-sat_inters([inters(S1,_S2,S3)|R1],R2,c,F) :-      % (case ii) inters(empty,t1,t2)
+sat_inters([inters(S1,_S2,S3)|R1],R2,c,F) :-      % (case ii) inters({},S2,S3)
     nonvar(S1), is_empty(S1),!,
     sunify(S3,{},C),
     append(C,R1,R3),
     sat_step(R3,R2,_,F).
 
-sat_inters([inters(S1,S2,S3)|R1],[inters(S1,S2,S3)|R2],Stop,F) :-  % inters(S1,S2,S3), S1,S3 var: irreducible form
-    var(S1),var(S3),!,
+sat_inters([inters(S1,S2,S3)|R1],[inters(S1,S2,S3)|R2],Stop,F) :-  % inters(S1,S2,S3), S1, S2, S3 var: irreducible form
+    var(S1),var(S2),var(S3),!,
     sat_step(R1,R2,Stop,F).
-sat_inters([inters(S1,S2,S3)|R1],[inters(S1,S2,S3)|R2],Stop,F) :-  % inters(S1,S2,S3), S2,S3 var: irreducible form
-    var(S2),var(S3),!,
+
+sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-       % inters(S1,S2,S3), S2 and S3 var (S1 nonvar)
+    var(S3),var(S2),!,
+    sat_inters([inters(S2,S1,S3)|R1],R2,_,F).
+
+sat_inters([inters(S1,S2,S3)|R1],R2,c,f) :-       % special case - inters(X,{.../X},S3), S3 var - smode(solver)
+    b_getval(smode,solver),
+    var(S3),var(S1),
+    nonvar(S2), S2 = _ with _,
+    tail(S2,TS2), samevar(S1,TS2),!, 
+    sat_un([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,f).
+
+sat_inters([inters(S1,S2,S3)|R1],R2,c,f) :-       % inters(S1,{...},S3), S3 and S1 var, S2 nonvar - smode(solver)
+    b_getval(smode,solver),
+    var(S3),var(S1),nonvar(S2),S2=B with X,!,
+    (sunify(S1,N with X,R),
+     sunify(S3,N1 with X,RR),
+     append(R,RR,RRR),append(RRR,R1,R3),
+     sat_nin([X nin N,X nin N1,inters(N,B,N1)|R3],R2,_,f)
+    ;
+     sat_nin([X nin S1,inters(S1,B,S3)|R1],R2,_,f)
+    ).
+sat_inters([inters(S1,S2,S3)|R1],R2,c,f) :-       % inters(S1,S2,S3), S3 and S1 var, S2 any nonvar non-set aggr. - smode(solver)
+    b_getval(smode,solver),
+    var(S3),var(S1),nonvar(S2),!,
+    sat_un([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,f).
+
+sat_inters([inters(S1,S2,S3)|R1],[inters(S1,S2,S3)|R2],Stop,F) :-  % inters(S1,S2,S3), S3 and S1 var: irreducible form
+    var(S3),var(S1),!,
     sat_step(R1,R2,Stop,F).
 
 sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-      % ground set: inters({...},{...},t)
@@ -3973,34 +4192,34 @@ sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-     % inters(r,s,t) and either r or 
      ;
      nonvar(S3), S3 = cp(_,_)
     ),!,
-    sat_step([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,F).
+    sat_un([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,F).
 
-sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-      % inters(S1,S2,S3), S3 any term, both S1 and S2 not-var - special case
+sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-      % inters(S1,S2,S3), S3 any term, S1 and S2 not-var - special case
     nonvar(S1),tail(S1,TS1),
     nonvar(S2),tail(S2,TS2),
     tail(S3,TS3),
     samevar3(TS1,TS2,TS3),!,
-    sat_step([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,F).
+    sat_un([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,F).
 
 sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-      % inters(S1,S2,S3), S3 var, both S1 and S2 not-var
     nonvar(S1),
     nonvar(S2), S2 = RS2 with X,
     var(S3),!,
     (S3 = RS3 with X,
-     sat_step([set(RS2),X in S1,inters(S1,RS2,RS3),set(RS2),set(RS3)|R1],R2,_,F)
+     sat_in([X in S1,inters(S1,RS2,RS3),set(RS2),set(RS3)|R1],R2,_,F)
      ;
-     sat_step([set(RS2),X nin S1,inters(S1,RS2,S3),set(RS2)|R1],R2,_,F)
+     sat_nin([X nin S1,inters(S1,RS2,S3),set(RS2)|R1],R2,_,F)
     ).
 
 sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-       % inters(S1,S2,S3), S3 not-var, both S1 and S2 not-var
     nonvar(S1),                             % S2 set term, S1, S3 either set or interval
     nonvar(S2), S2 = _RS2 with _X,
     nonvar(S3),!,
-    sat_step([inters(S1,S2,SRes),SRes=S3|R1],R2,_,F).
+    sat_inters([inters(S1,S2,SRes),SRes=S3|R1],R2,_,F).
 sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-       % inters(S1,S2,S3), S3 not-var, both S1 and S2 not-var
     nonvar(S2),                             % S1 set term, S2,S3 either set or interval
     nonvar(S1), S1 = _RS1 with _X,!,
-    sat_step([inters(S2,S1,S3)|R1],R2,_,F).
+    sat_inters([inters(S2,S1,S3)|R1],R2,_,F).
 
 sat_inters([inters(S1,S2,S3)|R1],[inters(S1,S2,S3)|R2],Stop,nf) :-  % inters(S1,S2,S3), either S1 or S2 var
     one_var(S1,S2),!,                                         % delayed until final_sat is called
@@ -4011,33 +4230,33 @@ sat_inters([inters(S1,S2,S3)|R1],R2,c,f) :-       % inters(S1,S2,S3), S3 not-var
     nonvar(S3),S3 = N3 with X,!,
     S1 = N1 with X,
     S2 = N2 with X,
-    sat_step([inters(N1,N2,N3),set(N1),set(N2),set(N3)|R1],R2,_,f).
+    sat_inters([inters(N1,N2,N3),set(N1),set(N2),set(N3)|R1],R2,_,f).
 sat_inters([inters(S1,S2,S3)|R1],R2,c,f) :-       % inters(S1,S2,S3), S3 not-var, either S1 or S2 var - special case
     nonvar(S3),tail(S3,TS3),
     one_var(S1,S2), tail(S2,TS2), tail(S1,TS1),
     samevar3(TS1,TS2,TS3),!,
-    sat_step([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,f).
+    sat_un([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,f).
 sat_inters([inters(S1,S2,S3)|R1],R2,c,f) :-       % inters(S1,S2,S3), S3 not-var, either S1 or S2 var
     var(S1),
     nonvar(S3),S3 = N3 with X,!,
     S1 = N1 with X,
     sunify(S2,N2 with X,C1),
     append(C1,R1,R3),
-    sat_step([X nin N2,inters(N1,N2,N3),set(N1),set(N2),set(N3)|R3],R2,_,f).
+    sat_nin([X nin N2,inters(N1,N2,N3),set(N1),set(N2),set(N3)|R3],R2,_,f).
 sat_inters([inters(S1,S2,S3)|R1],R2,c,f) :-       % inters(S1,S2,S3), S3 not-var, either S1 or S2 var
     var(S2),
     nonvar(S3),S3 = N3 with X,!,
     sunify(S1,N1 with X,C1),
     S2 = N2 with X,
     append(C1,R1,R3),
-    sat_step([X nin N1,inters(N1,N2,N3),set(N1),set(N2),set(N3)|R3],R2,_,f).
+    sat_nin([X nin N1,inters(N1,N2,N3),set(N1),set(N2),set(N3)|R3],R2,_,f).
 sat_inters([inters(S1,S2,S3)|R1],R2,c,f) :-       % inters(S1,S2,S3), S3 any term, either S1 or S2 var (other cases)
     one_var(S1,S2),!,
-    sat_step([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,f).
+    sat_un([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,f).
 
 sat_inters([inters(S1,S2,S3)|R1],R2,c,F) :-     % inters(r,s,t) and either r or s or t are CP
     (ris_term(S1),! ; ris_term(S2),! ; ris_term(S3)),!,
-    sat_step([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,F).
+    sat_un([un(D,S3,S1),un(E,S3,S2),disj(D,E),set(D),set(E)|R1],R2,_,F).
 
 sat_inters_int([inters(I1,I2,S3)|R1],R2,c,F) :-          % ground interval: inters(int(a,b),int(c,d),t),
     closed_intv(I1,L1,H1),                         % a,b,c,d constants
@@ -4082,14 +4301,15 @@ sat_inters_int([inters(I1,I2,S3)|R1],R2,c,F) :-          % non-ground interval -
 
 %%%%%%%%%%%%%%%%%%%%%% union (un/3)
 
-%solved form: un(X,Y,Z), var_st(X) & var_st(Y) & var_st(Z) & X \== Y
-%
+%solved form: un(X,Y,Z): var_st(X) & var_st(Y) & var_st(Z) & X \== Y
+%                        or
+%                        var_ris(X) & var_ris(Y) & var_ris(Z) & X \== Y
 %sat_un([un(X,Y,Z)|R1],[un(X,Y,Z)|R2],Stop,nf) :-     % un(X,Y,Z) (nf-irreducible form)
 %         var(X),var(Y),var(Z),!,
 %         sat_step(R1,R2,Stop,nf).
 
 sat_un([un(S1,S2,T)|R1],R2,c,F) :-                    % un(s,s,t)   [rule U_1]
-    S1==S2,!,                                   % (includes un({},{},t))
+    S1==S2,!,                                         % (includes un({},{},t))
     sunify(S1,T,C),
     append(C,R1,R3),
     sat_step(R3,R2,_,F).
@@ -4128,12 +4348,12 @@ sat_un([un(X,Y,Z)|R1],R2,c,F) :-                     % un(r,s,t) not in solved f
     (TZ={} ; A={} ; B={}),                      % un(cp({X/A},B),cp(C,D),{Y/A}), un(cp({X/A},{Y/B}),C,A),
     sat_un([un(X,Y,Z)|R1],R2,_,F).              % un(A,{X/B},cp({Y/A},C)), un({X/A},B,cp({Y/A},C)) .
 
-sat_un([un(S1,S2,T)|R1],R2,R,F) :-                   % un(r,s,t) and either r or s or t are non-var CP, i.e.,
-    (nonvar(S1), S1=cp(A,B), nonvar(A),nonvar(B),!     % un(cp(A,B),t1,t2), un(t1,cp(A,B),t1), un(t1,t2,cp(A,B))
-     ;                                                 % and both A and B are non-variable terms, and t1, t2 any terms
-     nonvar(S2), S2=cp(A,B), nonvar(A),nonvar(B),!     % (including CP)
+sat_un([un(S1,S2,T)|R1],R2,R,F) :-                      % un(r,s,t) and either r or s or t are non-var CP, i.e.,
+    (nonvar(S1), S1=cp(A,B), \+var_st(A),\+var_st(B),!  % un(cp(A,B),t1,t2), un(t1,cp(A,B),t1), un(t1,t2,cp(A,B))
+     ;                                                  % and both A and B are non-variable terms, and t1, t2 any terms
+     nonvar(S2), S2=cp(A,B), \+var_st(A),\+var_st(B),!  % (including CP)
      ;
-     nonvar(T), T=cp(A,B), nonvar(A),nonvar(B)
+     nonvar(T), T=cp(A,B), \+var_st(A),\+var_st(B)
     ),!,
     %write('unCP - un(r,s,t) and r or s or t are non-var CP'),nl,
     gcp_to_set(S1,SS1), gcp_to_set(S2,SS2), gcp_to_set(T,TT),
@@ -4464,7 +4684,7 @@ sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),Y,Z) (not_cp
     nonvar(X), X = cp(_,_),
     not_cp(Y), not_cp(Z),!,
     %write(cp_ncp_ncp),nl,
-    cp_to_set(1,X,Xt,Xu),
+    cp_to_set(X,Xt,Xu),
     append(Xu,R1,R3),
     %sat_un([un(Xt,Y,Z),set(Xt)|R3],R2,_,F).
     sat_step([delay(un(Xt,Y,Z),false),set(Xt)|R3],R2,_,F).
@@ -4473,14 +4693,14 @@ sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),cp(C,D),Z) (
     nonvar(Y), Y = cp(_,_),
     not_cp(Z),!,
     %write(cp_cp_ncp),nl,
-    cp_to_set(1,X,Xt,Xu), cp_to_set(2,Y,Yt,Yu),
+    cp_to_set(X,Xt,Xu), cp_to_set(Y,Yt,Yu),
     append(Xu,Yu,XYu), append(XYu,R1,R3),
     sat_step([un(Xt,Yt,Z),set(Xt),set(Yt)|R3],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(X,Y,cp(C,D)) (not_cp(X), not_cp(Y))
     not_cp(X), not_cp(Y),
     nonvar(Z), Z = cp(_,_),!,
     %write(ncp_ncp_cp),nl,
-    cp_to_set(3,Z,Zt,Zu),
+    cp_to_set(Z,Zt,Zu),
     append(Zu,R1,R3),
     sat_un([un(X,Y,Zt),set(Zt)|R3],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),Y,cp(C,D)) (not_cp(Y))
@@ -4488,8 +4708,8 @@ sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),Y,cp(C,D)) (
     not_cp(Y),
     nonvar(Z), Z = cp(_,_),!,
     %write(cp_ncp_cp),nl,
-    cp_to_set(1,X,Xt,Xu),
-    cp_to_set(3,Z,Zt,Zu),
+    cp_to_set(X,Xt,Xu),
+    cp_to_set(Z,Zt,Zu),
     append(Xu,Zu,XZu), append(XZu,R1,R3),
     sat_un([un(Xt,Y,Zt),set(Xt),set(Zt)|R3],R2,_,F).
 sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),cp(C,D),cp(E,F))
@@ -4497,19 +4717,36 @@ sat_un_cp([un(X,Y,Z)|R1],R2,c,F) :-                    % un(cp(A,B),cp(C,D),cp(E
     nonvar(Y), Y = cp(_,_),
     nonvar(Z), Z = cp(_,_),!,
     %write(cp_cp_cp),nl,
-    cp_to_set(1,X,Xt,Xu),
-    cp_to_set(2,Y,Yt,Yu),
-    cp_to_set(3,Z,Zt,Zu),
+    cp_to_set(X,Xt,Xu),
+    cp_to_set(Y,Yt,Yu),
+    cp_to_set(Z,Zt,Zu),
     append(Xu,Yu,XYu),append(XYu,Zu,XYZu),
     append(XYZu,R1,R3),
     sat_un([un(Xt,Yt,Zt),set(Xt),set(Yt),set(Zt)|R3],R2,_,F).
 
 % Transforms the cp X into the corresponding extensional set T and
 % stores in U the created constraints
-cp_to_set(N,X,T,U) :-
-    cp_to_set_t(N,X,T1),
-    cp_to_set_u(N,X,U1),
-    subs_cp(N,T1,U1,T,U).
+cp_to_set(X,T,U) :-
+    nonvar(X), X = cp(A,B),
+    nonvar(A), A = cp(_,_),
+    nonvar(B), B = cp(_,_),!,
+    cp_to_set(A,Ta,Ua),
+    cp_to_set(B,Tb,Ub),
+    T = cp(Ta,Tb),
+    append(Ua,Ub,U).
+cp_to_set(X,T,U) :-
+    nonvar(X), X = cp(A,B),
+    nonvar(A), A = cp(_,_),!,
+    cp_to_set(A,Ta,U),
+    T = cp(Ta,B).
+cp_to_set(X,T,U) :-
+    nonvar(X), X = cp(A,B),
+    nonvar(B), B = cp(_,_),!,
+    cp_to_set(B,Tb,U),
+    T = cp(A,Tb).
+cp_to_set(X,T,U) :- 
+    cp_to_set_t(M,X,T),
+    cp_to_set_u(M,X,U).
 
 cp_to_set_t(_,X,{}) :-                   % X = cp({},_)
     nonvar(X), X = cp(A,_),
@@ -4519,79 +4756,58 @@ cp_to_set_t(_,X,{}) :-                   % X = cp(_,{})
     nonvar(B), is_empty(B),!.
 cp_to_set_t(_,X,X) :-                   % X variable cp
     var_st(X),!.
-cp_to_set_t(N,X,T) :-                   % X = cp({Ea1,Ea2/_},{Eb1,Eb2/_}) (special case, to improve efficiency)
+cp_to_set_t(M,X,T) :-                   % X = cp({Ea1,Ea2/_},{Eb1,Eb2/_}) (special case, to improve efficiency)
     nonvar(X), X = cp(A,B),
     nonvar(A), A = A1 with Ea1,
     nonvar(A1), A1 = _ with Ea2,
     nonvar(B), B = B1 with Eb1,
     nonvar(B1), B1 = _ with Eb2,!,
-    T = N with [Ea1,Eb1] with [Ea1,Eb2] with [Ea2,Eb1] with [Ea2,Eb2].
-cp_to_set_t(N,X,T) :-                   % X = cp({Ea2/_},{Eb2/_})
+    T = M with [Ea1,Eb1] with [Ea1,Eb2] with [Ea2,Eb1] with [Ea2,Eb2].
+cp_to_set_t(M,X,T) :-                   % X = cp({Ea2/_},{Eb2/_})
     nonvar(X), X = cp(A,B),
     nonvar(A), A = _ with Ea,
     nonvar(B), B = _ with Eb,!,
-    T = N with [Ea,Eb].
+    T = M with [Ea,Eb].
 cp_to_set_t(_,X,X).
 
-cp_to_set_u(N,X,[N=N]) :-               % X variable cp
+cp_to_set_u(M,X,[M=M]) :-               % X variable cp
     var_st(X),!.
     %write('cp_to_set_u - X variable cp'),nl.
-cp_to_set_u(N,X,[N = {}]) :-            % X = cp({y},{z})
+cp_to_set_u(M,X,[M = {}]) :-            % X = cp({y},{z})
     nonvar(X), X = cp(A,B),
     nonvar(A), A = Sa with _, nonvar(Sa), is_empty(Sa),
     nonvar(B), B = Sb with _, nonvar(Sb), is_empty(Sb),!.
     %write('cp_to_set_u - X = cp({y},{z})'),nl.
-cp_to_set_u(N,X,U) :-                   % X = cp({y/Sa},{z})
+cp_to_set_u(M,X,U) :-                   % X = cp({y/Sa},{z})
     nonvar(X), X = cp(A,B),
     nonvar(A), A = Sa with _,
     nonvar(B), B = Sb with _, nonvar(Sb), is_empty(Sb),!,
     %write('cp_to_set_u - X = cp({y/Sa},{z})'),nl,
-    U = [N = cp(Sa,B), set(Sa)].
-cp_to_set_u(N,X,U) :-                   % X = cp({y},{z/Sb})
+    U = [M = cp(Sa,B), set(Sa)].
+cp_to_set_u(M,X,U) :-                   % X = cp({y},{z/Sb})
     nonvar(X), X = cp(A,B),
     nonvar(A), A = Sa with _, nonvar(Sa), is_empty(Sa),
     nonvar(B), B = Sb with _,!,
     %write('cp_to_set_u - X = cp({y},{z/Sb})'),nl,
-    U = [N = cp(A,Sb), set(Sb)].
-cp_to_set_u(N,X,U) :-                   % X = cp({y1,y2/Sa},{z1,z2/Sb})
+    U = [M = cp(A,Sb), set(Sb)].
+cp_to_set_u(M,X,U) :-                   % X = cp({y1,y2/Sa},{z1,z2/Sb})
     nonvar(X), X = cp(A,B),          % (special case, to improve efficiency)
     nonvar(A), A = A1 with Ea1,
     nonvar(A1), A1 = Sa with Ea2,
     nonvar(B), B = B1 with Eb1,
     nonvar(B1), B1 = Sb with Eb2,!,
     %write('cp_to_set_u - X = cp({y1,y2/Sa},{z1,z2/Sb})'),nl,
-    U = [un(cp({} with Ea1,Sb),cp({} with Ea2,Sb),N1),
-         un(N1,cp(Sa,Sb with Eb1 with Eb2),N),
+    U = [delay(un(cp({} with Ea1,Sb),cp({} with Ea2,Sb),N1),false),
+         delay(un(N1,cp(Sa,Sb with Eb1 with Eb2),M),false),
          set(Sa),set(Sb),set(N1)].
-
-cp_to_set_u(N,X,U) :-                   % X = cp({y/Sa},{z/Sb})
+cp_to_set_u(M,X,U) :-                   % X = cp({y/Sa},{z/Sb})
     nonvar(X), X = cp(A,B),
     nonvar(A), A = Sa with Ea,
     nonvar(B), B = Sb with Eb,!,
     %write('cp_to_set_u - X = cp({y/Sa},{z/Sb})'),nl,
-    U = [un(cp({} with Ea,Sb),cp(Sa,Sb with Eb),N),
+    U = [delay(un(cp({} with Ea,Sb),cp(Sa,Sb with Eb),M),false),
          set(Sa), set(Sb)].
-
-cp_to_set_u(_,_,[N=N]).
-
-subs_cp(N,T1,U1,T,U) :-
-    nonvar(T1),
-    (   T1 = N with E1 with E2 with E3 with E4 ->    % (special case, to improve efficiency)
-        T = M with E1 with E2 with E3 with E4,
-        U1 = [un(A1,B1,N1),un(N1,B,N)|C],
-        U = [delay(un(A1,B1,N1),false),delay(un(N1,B,M),false),set(M)|C]
-    ;
-        T1 = N with E,
-        !,
-        T = M with E,
-        (   U1 = [N = A|C] ->
-            U = [M = A|C]
-        ;
-            U1 = [un(A,B,N)|C],
-            U = [delay(un(A,B,M),false),set(M)|C]
-        )
-    ).
-subs_cp(_,T,U,T,U).
+cp_to_set_u(_,_,[M=M]).
 
 % get_elem(+S,?E,?R,-C): true if
 % S is a (non-variable) set term, E is an element of S,
@@ -4789,7 +5005,6 @@ sat_disj_ris([disj(I,A)|R1],R2,c,F) :-                        % disj(A,ris(...))
     sat_disj_ris([disj(A,I)|R1],R2,_,F).
 
 
-
 %%%%%%%%%%%%%%%%%%%%%% not union (nun/3)
 
 sat_nun([nun(S1,S2,S3)|R1],R2,c,F) :-               % nun(s1,s2,s3)
@@ -4818,6 +5033,93 @@ sat_ndisj([ndisj(X,Y)|R1],R2,c,F) :-                % ndisj(X,X)
 sat_ndisj([ndisj(S,T)|R1],R2,c,F) :-                % ndisj(A,B), A,B:{...} or ris or CP
     sat_step([N in S, N in T|R1],R2,_,F).
 
+
+%%%%%%%%%%%%%%%%%%%%%% set difference (diff/3) 
+
+sat_diff([diff(A,B,C)|R1],R2,c,F) :-       % diff(A,A,C)
+    A == B,!,
+    sunify(C,{},R),
+    append(R,R1,R3),
+    sat_step(R3,R2,_,F).
+
+sat_diff([diff(A,B,C)|R1],[diff(A,B,C)|R2],Stop,F) :-   % diff(X,Y,Z), var(X),var(Y),var(Z) (irreducible form)
+    var(A),var(B),var(C),!,
+    sat_step(R1,R2,Stop,F).
+
+sat_diff([diff(A,_B,C)|R1],R2,c,F) :-      % diff({},B,C)
+    nonvar(A), is_empty(A),!,
+    sunify(C,{},R),
+    append(R,R1,R3),
+    sat_step(R3,R2,_,F).
+
+sat_diff([diff(A,B,C)|R1],R2,c,F) :-      % diff(A,{},C) 
+    nonvar(B), is_empty(B),!,             
+    sunify(C,A,R),
+    append(R,R1,R3),
+    sat_step(R3,R2,_,F).
+
+sat_diff([diff(A,B,C)|R1],R2,c,F) :-      % diff(A,B,{})
+    nonvar(C), is_empty(C),!,             
+    sat_un([un(A,B,B)|R1],R2,_,F).
+
+sat_diff([diff(A,B,S3)|R1],R2,c,F) :-     % diff(A,B,{X/C})  
+     nonvar(S3), S3 = _ with X,
+     b_getval(smode,solver),!,        
+     sunify(S3,N1 with X,R0),
+     sunify(A,N with X,R),
+     append(R0,R1,R3),
+     append(R3,R,R4),
+     sat_nin([X nin N1,X nin N,X nin B,diff(N,B,N1),set(N),set(N1)|R4],R2,_,F).
+
+sat_diff([diff(A,S2,C)|R1],R2,c,F) :-     % diff(A,{X},C) 
+     nonvar(S2), S2 = B with X, B=={},
+     b_getval(smode,solver),!,        
+    (sunify(A,N with X,R),
+     append(R,R1,R3),
+     sat_nin([X nin N,C=N,set(N)|R3],R2,_,F)
+     ;
+     sat_nin([X nin A,C=A|R1],R2,_,F)).
+
+sat_diff([diff(A,B,C)|R1],R2,c,F) :-     % special case - diff(X,{.../X},C) 
+     var(A),
+     nonvar(B), B = _ with _,
+     tail(B,TB), samevar(A,TB),!, 
+     sat_sub([subset(C,A),un(B,C,D),subset(A,D),disj(B,C),set(D)|R1],R2,_,F).
+sat_diff([diff(A,B,C)|R1],R2,c,F) :-     % special case - diff({.../X},{.../X},C) 
+     nonvar(A), A = _ with _,
+     nonvar(B), B = _ with _,
+     tail(A,TA), tail(B,TB), samevar(TA,TB),!, 
+     sat_sub([subset(C,A),un(B,C,D),subset(A,D),disj(B,C),set(D)|R1],R2,_,F).
+
+sat_diff([diff(A,S2,C)|R1],R2,c,F) :-     % diff(A,{X/B},C) 
+     nonvar(S2), S2 = B with X,
+     b_getval(smode,solver),!,        
+     (sunify(A,N with X,R),
+      append(R,R1,R3),
+      sat_nin([X nin N,diff(N,B,C),set(N)|R3],R2,_,F)
+      ;
+      sat_nin([X nin A,diff(A,B,C)|R1],R2,_,F)
+     ).
+
+sat_diff([diff(S1,B,C)|R1],R2,c,F) :-     % diff({X/A},B,C) 
+     nonvar(S1), S1 = _ with X,
+     b_getval(smode,solver),!,        
+     sunify(S1,N1 with X,R0),
+     append(R0,R1,R3),
+     (sunify(C,N with X,R),
+      append(R,R3,R4),
+      sat_nin([X nin N1,X nin N,X nin B,diff(N1,B,N),set(N),set(N1)|R4],R2,_,F)
+      ;
+      sunify(B,N with X,R),
+      append(R,R3,R4),
+      sat_nin([X nin N1,X nin N,diff(N1,N,C),set(N),set(N1)|R4],R2,_,F)
+     ).
+
+sat_diff([diff(A,B,C)|R1],R2,c,F) :-      % all other cases
+    sat_sub([subset(C,A), un(B,C,D), subset(A,D),disj(B,C), set(D)
+    |R1],R2,_,F).
+
+
 %%%%%%%%%%%%
 %%%%%%%%%%%% Rewriting rules for aggregate constraints %%%%%%%%%%%%
 %%%%%%%%%%%%
@@ -4828,9 +5130,10 @@ sat_ndisj([ndisj(S,T)|R1],R2,c,F) :-                % ndisj(A,B), A,B:{...} or r
 %
 sat_size([size(S,N)|R1], [solved(size(S,N),(var(S),var(N)),1,f)|R2],c,F) :-
     var(S),var(N),!,                           % size(S,N) (irreducible form)
-    solve_int(N >= 0,IntC),
+    solve_int(N >= 0,IntC),    
     append(IntC,R1,R3),
     sat_step(R3,R2,_,F).
+
 sat_size([size(S,0)|R1],R2,c,F) :-                  % size({},t) or size(int(a,b),t),
     is_empty(S),!,                             % with a>b (S either var or nonvar)
     sat_step(R1,R2,_,F).
@@ -4876,21 +5179,6 @@ sat_size([size(R with X,T)|R1],R2,c,F) :-
     (   sat_step([X nin R,set(R),integer(M),size(R,M)|R3],R2,_,F)
     ;   sat_step([R=N with X,set(N),X nin N,integer(M),size(N,M)|R3],R2,_,F)
     ).
-
-count_var(T,0,0) :-      % count_var/3 not used at present
-    is_empty(T),
-    !.
-count_var(R with A,NonVar,Var) :-           % var(A)
-    var(A),
-    !,
-    count_var(R,NonVar,Var1),
-    Var is Var1 + 1.
-count_var(R with A,NonVar,Var) :-           % nonvar(A), duplicate A
-    find_gdup(A,R),!,
-    count_var(R,NonVar,Var).
-count_var(R with _A,NonVar,Var) :-          % nonvar(A)
-    count_var(R,NonVar1,Var),
-    NonVar is NonVar1 + 1.
 
 find_gdup(X,R with Y) :-
     var(Y),
@@ -6144,7 +6432,7 @@ sat_npair([npair(X)|R1],R2,c,F) :-                % npair([a,b,c,...])
 sat_ndom([ndom(R,A)|R1],R2,c,F) :-                % ndom(R,A)
     (   sat_step([[N1,_N2] in R, N1 nin A |R1],R2,_,F)
     ;   sat_step([N1 in A, comp({} with [N1,N1],R,{}) |R1],R2,_,F)
-%   ;   sat_step([N1 in A, dom(R,D), N1 nin D, set(D)|R1],R2,_,F)    %alternative implementation
+        %sat_step([N1 in A, dom(R,D), N1 nin D, set(D)|R1],R2,_,F)    %alternative implementation
     ;   sat_step([nrel(R)|R1],R2,_,F)
     ).
 
@@ -6153,7 +6441,7 @@ sat_ndom([ndom(R,A)|R1],R2,c,F) :-                % ndom(R,A)
 sat_ninv([ninv(R,S)|R1],R2,c,F) :-                % ninv(R,R)
     var(R),var(S),R == S,!,
     (   sat_step([[N1,N2] in R, [N2,N1] nin R|R1],R2,_,F)
-%   (   sat_step([R = N with [N1,N2], [N2,N1] nin N, N1 neq N2|R1],R2,_,F)  %alternative implementation
+        %sat_step([R = N with [N1,N2], [N2,N1] nin N, N1 neq N2|R1],R2,_,F)  %alternative implementation
     ;   sat_step([nrel(R)|R1],R2,_,F)
     ).
 sat_ninv([ninv(R,S)|R1],R2,c,F) :-                % ninv(R,S)
@@ -6366,303 +6654,386 @@ test_final([solved(C,_,_,_)|R1],R2,c,f) :-     % final sat: G is true and not in
     sat_step([C|R1],R2,_,f).                %  --> remove solved
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%      Level 2     %%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%  Check pairs of constraints   %%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%      Level 2     %%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%  Check pairs of constraints   %%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%replace-rule:
+% C1 &...& Ck &... --X-> C1_1 &...& C1_n &...& Ck &... (k >= 2)
+% e.g.: 
+% dom(S,N) &...& dom(S,M) &... --X-> N=M &...& dom(S,M) &...
+
+%inference-rule:
+% C1 &...& Ck & ... --+-> 
+%     solved(C1,...,f) & D1 &...& Dn &...& Ck &... (k >= 2)
+% e.g.: 
+% dom(S,D) &...& D neq {}  &... -+-> 
+%     solved(dom(S,D),(var(S),var(D)),[1|L],f) & S neq {} &...& D neq {} &...
+
+%fail-rule:
+% C1 &...& Ck &... ---> fail
+% e.g.: 
+% set(S) &...& nset(S) &... ---> fail
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% global_check1 %%%%%%%%%%%%%%%%%%%%%%%%%
+% check type clashes, apply neq elimination, force set cardinality
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 global_check1([],_,[],_) :- !.
 global_check1([glb_state(Rel)|RC],GC,[glb_state(Rel)|NewC],F) :- !,
-    global_check1(RC,GC,NewC,F).
+    global_check1(RC,GC,NewC,F).         % glb_state: nothing to do
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%% type clashes
+%%%%%% type clashes
 
 global_check1([C|RC],GC,[C|NewC],F) :-   % type clashes --> fail
     type_constr(C),!,
     no_type_error_all(C,RC),
     global_check1(RC,GC,NewC,F).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%% neq elimination: X neq t, X set variable (only in final mode)
+%%%%%% neq elimination: X neq t, X set variable (only in final mode)
 
 global_check1([C|RC],GC,NewC,f) :-       % neq: W neq T and W or T set variables
-    \+ noneq_elim,
-    is_neq(C,1,W,T),
-    var(W), var(T),
-    find_setconstraint(W,T,GC,X,Y),!,
+    \+ noneq_elim,                       % W neq T & ... & Ck[W,T] & ... --X-> 
+    is_neq(C,1,W,T),                     %        ((Z in W & Z nin T) or (Z nin W & Z in T)) & ... & Ck[W,T]  & ...
+    var(W), var(T),                      % Ck either un/3 or subset/2 or inters/3 or diff/3 or size/2 or 
+    find_setconstraint(W,T,GC,X,Y),!,    % dom/2 or ran/2 or comp/3 or inv/2 or id/2 or ris = {} or ris = ris
     trace_irules('setvar-neq_var'),
     mk_new_constr(X,Y,OutC),
     append(OutC,CC,NewC),
     global_check1(RC,GC,CC,f).
 global_check1([C|RC],GC,NewC,f) :-       % neq: W neq {...} and W a set variable
-    \+ noneq_elim,
-    is_neq(C,1,W,T),
-    var(W), aggr_term(T),
+    \+ noneq_elim,                       % W neq {} & ... & Ck[W] & ... --X->   Z in W & ... & Ck[W]  & ...         
+    is_neq(C,1,W,T),                     % W neq {...} & ... & Ck[W] & ... --X->
+    var(W), aggr_term(T),                %        ((Z in W & Z nin {...}) or (Z nin W & Z in {...})) & ... & Ck[W]  & ...
     find_setconstraint(W,GC),!,
     trace_irules('setvar-neq_set'),
     mk_new_constr2(W,T,OutC),
     append(OutC,CC,NewC),
     global_check1(RC,GC,CC,f).
 
-global_check1([C|RC],GC,[size(R,M),X nin R,M>=0|NewC],f) :-
-    \+ noneq_elim,
-    is_size(C,_,S,N),
-    get_domain(N,N in ..(A,_)),
-    (number(A) -> A > 0 ; A==sup),!,   
-    trace_irules('size-neq'),
-    S = R with X,
-    solve_int(M is N-1,_IntC),
-    global_check1(RC,GC,NewC,f).
+%%%%%% force set cardinality
+
+global_check1([C|RC],GC,Res,f) :-    
+   \+size_solver_on,                % (size_solver_off) size(S,N), var S, var N
+    is_size(C,_,S,N),var(S),var(N),!, 
+    GC = cs(ICS,_), 
+    %DBG write('constraint: '),write(ICS),nl,
+    minimize(ICS,N,M),
+    %DBG write('min.: '),write(M),nl, 
+    (M == 0 -> 
+          Res=[solved(size(S,N),(var(S),var(N)),2,f)|NewC]
+     ;
+          mk_set_atleastN_var(M,R,S,C1),                     
+          solve_int(K is N-M,R2),
+          append(C1,R2,R3),
+          append([size(R,K)|R3],NewC,Res)
+    ),
+    global_check1(RC,GC,NewC,f).  
+
+global_check1([C|RC],GC,Res,f) :-    % (size_solver_on & deep_check_size=on) size(S,N), var S, var N
+    size_solver_on,
+    nb_getval(deep_check_size,DCS),DCS==on,                       
+    is_size(C,_,S,N),var(S),var(N),!, 
+    GC = cs(ICS,_), 
+    %DBG write('constraint: '),write(ICS),nl,
+    nb_getval(sum_min,MM),
+    minimize(ICS,N,M),
+    %DBG write('\nmin.: '),write(M),nl, 
+    (M == 0 -> 
+         Res=[solved(size(S,N),(var(S),var(N)),2,f)|NewC]    
+     ;       
+         mk_set_atmostM_var(N,M,MM,S,R3),                   
+         append(R3,NewC,Res)                  
+    ),
+    global_check1(RC,GC,NewC,f).  
+
+%%%%%% all other cases
 
 global_check1([C|RC],GC,[C|NewC],F) :-!,  % all other constraints - nothing to do
     global_check1(RC,GC,NewC,F).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%% inference rules
+%%%%%% utility predicates for global_check1
+
+%mk_set_atmostM_var(?N,+M,+MM,-S,-R3)  %S is a set of cardinality N, N in M..MM  
+mk_set_atmostM_var(N,M,MM,S,R3) :-    
+    %DBG write('\nmin.: '),write(M),nl, 
+    %DBG write('sum_min.: '),write(MM),nl, 
+    Diff is MM-M,
+    (M =< Diff -> Sup = Diff ; Sup = MM),
+    nat_num_bound(M,Sup,N),
+    mk_set_atleastN_var(N,{},S,R3).
+
+nat_num_bound(N,Sup,N):-     %GFR puo' essere rimpiazzato da all_int/3  (da verificare)
+     N =< Sup.      
+nat_num_bound(N,Sup,M) :-
+     N =< Sup, 
+     N1 is N+1,
+     nat_num_bound(N1,Sup,M).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%% global_check2 %%%%%%%%%%%%%%%%%%%%%%%%%
+% inference rules: 
+% unicity property, size inference, dom-ran-comp inference rules
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 global_check2([],_,[],_) :- !.
-global_check2([glb_state(Rel)|RC],GC,[glb_state(Rel)|NewC],F) :- !,
+global_check2([glb_state(Rel)|RC],GC,[glb_state(Rel)|NewC],F) :- !,  % glb_state: nothing to do
     global_check2(RC,GC,NewC,F).
-global_check2([X neq Y|RC],GC,[X neq Y|NewC],F) :- !,
+global_check2([X neq Y|RC],GC,[X neq Y|NewC],F) :- !,                % neq: nothing to do
     global_check2(RC,GC,NewC,F).
-global_check2([C|RC],GC,[C|NewC],F) :-
+global_check2([C|RC],GC,[C|NewC],F) :-                               % type_constr: nothing to do
     type_constr(C),!,
     global_check2(RC,GC,NewC,F).
-global_check2([solved(C,Cond,Lvl,Mode)|RC],GC,NewC,F) :- !,
+global_check2([solved(C,Cond,Lvl,Mode)|RC],GC,NewC,F) :- !,          % temporaly remove 'solved' mode
     global_check2(C,[solved(C,Cond,Lvl,Mode)|RC],GC,NewC,F).
-global_check2([C|RC],GC,NewC,F) :-
+global_check2([C|RC],GC,NewC,F) :-                                   % process all other constraints
     global_check2(C,[C|RC],GC,NewC,F).
 
-%%%%%%%%%% unicity property
+%%%%%%%%%%%%%%%%%%%%%%% compulsory rules %%%%%%%%%%%%%%%%%%%%%%%%%
 
-global_check2(dom(_,_),[C|RC],GC,NewC,F) :-       % dom-dom: dom(X,N) & dom(X,M) --> dom(X,M) & N=M
-    is_dom_l(C,_,X,N,_),
-    var(X),
-    find_dom(X,RC,M),!,
-    trace_irules('dom-dom'),
-    sunify(N,M,CEq),
-    append(CEq,NewC1,NewC),
-    global_check2(RC,GC,NewC1,F).
-global_check2(dompf(_,_),[C|RC],GC,NewC,F) :-     % dompf-dompf: dompf(X,N) & dompf(X,M) --> dompf(X,M) & N=M
-    is_dom_l(C,_,X,N,_),
-    var(X),
-    find_dom(X,RC,M),!,
-    trace_irules('dom-dom'),
-    sunify(N,M,CEq),
-    append(CEq,NewC1,NewC),
-    global_check2(RC,GC,NewC1,F).
-global_check2(ran(_,_),[C|RC],GC,NewC,F) :-       % ran-ran: ran(X,N) & ran(X,M) --> ran(X,M) & N=M
-    is_ran_l(C,_,X,N),
-    var(X),
-    find_ran(X,RC,M),!,
-    trace_irules('ran-ran'),
-    sunify(N,M,CEq),
-    append(CEq,NewC1,NewC),
-    global_check2(RC,GC,NewC1,F).
-global_check2(un(_,_,_),[C|RC],GC,NewC,F) :-       % un-un: un(X,Y,Z1) & un(Y,X,Z2) --> un(X,Y,Z1) & Z1 = Z2
-    is_un_l(C,_,X,Y,Z1),
-    var(X),var(Y),var(Z1),
-    find_un2(X,Y,RC,Z2), !,
-    trace_irules('un-un'),
-    sunify(Z1,Z2,CEq),
-    append(CEq,NewC1,NewC),
-    global_check2(RC,GC,NewC1,F).
-global_check2(size(_,_),[C|RC],GC,NewC,F) :-       % size-size: size(S,N) & size(S,M) ---> size(S,M) & N=M
+%%%%%% unicity property
+
+global_check2(size(_,_),[C|RC],GC,NewC,F) :-      % size-size: size(S,N) & size(S,M) ---> size(S,M) & N=M
     is_size(C,1,X,N),
     var(X),
     find_size(X,RC,M),!,
-    trace_irules('size-size'),
+    %trace_irules('size-size'),
     N = M,
     global_check2(RC,GC,NewC,F).
-global_check2(delay((size(_,_) & true),_),C,GC,NewC,F) :-
-    global_check2(size(_,_),C,GC,NewC,F).
-/*global_check2(smin(_,_),[C|RC],GC,NewC,F) :-       % min-min: smin(S,N) & smin(S,M) ---> smin(S,M) & N=M
+
+global_check2(un(_,_,_),[C|RC],GC,NewC,F) :-      % un-un: un(X,Y,Z1) & un(X,Y,Z2) or un(X,Y,Z1) & un(Y,X,Z2)
+    is_un_l(C,_,X,Y,Z1),                          % --X-> un(X,Y,Z1) & Z1 = Z2
+    var(X),var(Y),var(Z1),
+    find_un2(X,Y,RC,Z2), !,
+    %trace_irules('un-un'),
+    sunify(Z1,Z2,CEq),
+    append(CEq,NewC1,NewC),
+    global_check2(RC,GC,NewC1,F).
+
+global_check2(diff(_,_,_),[C|RC],GC,NewC,F) :-    % diff-diff: diff(X,Y,Z1) & diff(X,Y,Z2)
+    is_diff(C,_,X,Y,Z1),                          % --X-> diff(X,Y,Z1) & Z1 = Z2
+    var(X),var(Y),var(Z1),
+    find_diff(X,Y,RC,Z2), !,
+    %trace_irules('diff-diff'),
+    sunify(Z1,Z2,CEq),
+    append(CEq,NewC1,NewC),
+    global_check2(RC,GC,NewC1,F).
+
+global_check2(dom(_,_),[C|RC],GC,NewC,F) :-       % dom-dom: dom(X,N) & dom(X,M) --X-> dom(X,M) & N=M
+    is_dom_l(C,_,X,N,_),
+    var(X),
+    find_dom(X,RC,M),!,
+    %trace_irules('dom-dom'),
+    sunify(N,M,CEq),
+    append(CEq,NewC1,NewC),
+    global_check2(RC,GC,NewC1,F).
+global_check2(dompf(_,_),[C|RC],GC,NewC,F) :-     % dompf-dompf: dompf(X,N) & dompf(X,M) --X-> dompf(X,M) & N=M
+    is_dom_l(C,_,X,N,_),
+    var(X),
+    find_dom(X,RC,M),!,
+    %trace_irules('dom-dom'),
+    sunify(N,M,CEq),
+    append(CEq,NewC1,NewC),
+    global_check2(RC,GC,NewC1,F).
+global_check2(ran(_,_),[C|RC],GC,NewC,F) :-       % ran-ran: ran(X,N) & ran(X,M) --X-> ran(X,M) & N=M
+    is_ran_l(C,_,X,N),
+    var(X),
+    find_ran(X,RC,M),!,
+    %trace_irules('ran-ran'),
+    sunify(N,M,CEq),
+    append(CEq,NewC1,NewC),
+    global_check2(RC,GC,NewC1,F).
+
+%%%%%% temporaly disabled for efficiency reasons %%%%%%%
+/*global_check2(smin(_,_),[C|RC],GC,NewC,F) :-    % min-min: smin(S,N) & smin(S,M) --X-> smin(S,M) & N=M
     is_min(C,1,X,N),
     var(X),
     find_min(X,RC,M),!,
-    trace_irules('min-min'),
+    %trace_irules('min-min'),
     N = M,
     global_check2(RC,GC,NewC,F).
-global_check2(smax(_,_),[C|RC],GC,NewC,F) :-       % max-max: smax(S,N) & smax(S,M) ---> smax(S,M) & N=M
+global_check2(smax(_,_),[C|RC],GC,NewC,F) :-      % max-max: smax(S,N) & smax(S,M) --X-> smax(S,M) & N=M
     is_max(C,1,X,N),
     var(X),
     find_max(X,RC,M),!,
-    trace_irules('max-max'),
+    %trace_irules('max-max'),
     N = M,
     global_check2(RC,GC,NewC,F).
-global_check2(sum(_,_),[C|RC],GC,NewC,F) :-       % sum-sum: sum(S,N) & sum(S,M) ---> sum(S,M) & N=M
+global_check2(sum(_,_),[C|RC],GC,NewC,F) :-       % sum-sum: sum(S,N) & sum(S,M) --X-> sum(S,M) & N=M
     is_sum(C,1,X,N),
     var(X),
     find_sum(X,RC,M),!,
-    trace_irules('sum-sum'),
+    %trace_irules('sum-sum'),
     N = M,
     global_check2(RC,GC,NewC,F).*/
 
-%%%%%%%%%%  list constraints             % in-nin: T in X & T1 nin X (X is a list) --> T neq T1
-                                         % in-in: T in X & X in T1 (X is a list) --> T neq T1
-global_check2(_ in _,[solved(T in X,G,3,f)|RC],GC,
-        [solved(T in X,G,2,f),T neq T1|NewC],F) :- % called only after executing level 3 rules
-    other_aggrs(on),
-    (   find_nin(X,GC,T1)
-    ;   find_in(X,GC,T1)
-    ),
-    !,
-    global_check2(RC,GC,NewC,F).
+%%%%%% all other constraints
 
-%%%%%%%%%% suppress inference rules
-
-global_check2(_,[C|RC],GC,[C|NewC],F) :-
+global_check2(_,[C|RC],GC,[C|NewC],F) :-           % if noirules, all other constraints - nothing to do
     noirules,!,
     global_check2(RC,GC,NewC,F).
 
-%%%%%%%%%% other inference rules
+%%%%%%%%%%%%%%%%%%%%%%%%%%%% optional rules %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-global_check2(dom(_,_),C,GC,AddedC,F) :-
+global_check2(dom(_,_),C,GC,AddedC,F) :-           % dom-neq
     global_check2_dom(C,GC,AddedC,F),!.
 
-global_check2(dompf(_,_),C,GC,AddedC,F) :-
+global_check2(dompf(_,_),C,GC,AddedC,F) :-         % dompf-neq, dompf-size (size_solver_off)
     global_check2_dompf(C,GC,AddedC,F),!.
 
-global_check2(ran(_,_),C,GC,AddedC,F) :-
+global_check2(ran(_,_),C,GC,AddedC,F) :-           % ran-neq, ran-size (size_solver_off)
     global_check2_ran(C,GC,AddedC,F),!.
-                                        % int-not empty: int(A,B)={} & int(A,B) neq {} (A,B var) --> fail
+                                                   % int-not empty: int(A,B)={} & int(A,B) neq {} (A,B var) --> fail
 global_check2(_ = _,[T1 = T2|RC],GC,[T1 = T2|NewC],F) :-
     nonvar(T1), T1 = int(A,B), nonvar(T2), is_empty(T2), !,
     \+ find_neq(int(A,B),GC),
     global_check2(RC,GC,NewC,F).
 
-global_check2(un(_,_,_),C,GC,AddedC,F) :-
+global_check2(un(_,_,_),C,GC,AddedC,F) :-          % un-rel/pfun, un-size (size_solver_off)
     global_check2_un(C,GC,AddedC,F),!.
 
-%%%%%%%%%% all other constraints - nothing to do
-
-global_check2(_,[C|RC],GC,[C|NewC],F) :-
+%%%%%% list constraints       % (other_aggrs(on)) in-nin: T in X & T1 nin X (X is a list) --> T neq T1
+                              % in-in: T in X & X in T1 (X is a list) --> T neq T1
+global_check2(_ in _,[solved(T in X,G,3,f)|RC],GC,
+        [solved(T in X,G,2,f),T neq T1|NewC],F) :- % called only after executing level 3 rules
+    other_aggrs(on),
+    find_nin(X,GC,T1),
+    !,
     global_check2(RC,GC,NewC,F).
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%% all other constraints 
 
-%%%%%%%%%% not emptiness and size
-                                        % dom-neq: dom(S,D) & D neq {} --> dom(S,D) & D neq {} & S neq {}
+global_check2(_,[C|RC],GC,[C|NewC],F) :-           % all other constraints - nothing to do
+    global_check2(RC,GC,NewC,F).
+
+%%%%%%%%%% 
+                                        
 global_check2_dom([C|RC],GC,AddedC,F) :-
-    is_dom_l(C,L,S,D,RorF),
+    is_dom_l(C,L,S,D,RorF),             % dom-neq: dom(S,D) & D neq {} --+-> dom(S,D) & D neq {} & S neq {}
     var(S),var(D),\+member(1,L),
-    find_neq(D,GC),!,
-    trace_irules('dom-neq_dom'),
+    find_neq(D,GC),
+    !,
+    %trace_irules('dom-neq_dom'),
     add_dom_neq(RorF,S,D,AddedC,L,NewC),
     global_check2(RC,GC,NewC,F).
-                                        % dom-neq: dom(S,D) & S neq {} --> dom(S,D) & D neq {} & S neq {}
 global_check2_dom([C|RC],GC,AddedC,F) :-
-    is_dom_l(C,L,S,D,RorF),
+    is_dom_l(C,L,S,D,RorF),             % dom-neq: dom(S,D) & S neq {} --+-> dom(S,D) & D neq {} & S neq {}
     var(S),var(D),\+member(1,L),
-    find_neq(S,GC),!,
-    trace_irules('dom-neq_rel'),
+    find_neq(S,GC),
+    !,
+    %trace_irules('dom-neq_rel'),
     add_dom_neqd(RorF,S,D,AddedC,L,NewC),
     global_check2(RC,GC,NewC,F).
-                                        % dompf-neq: dompf(S,D) & D neq {} --> dompf(S,D) & D neq {} & S neq {}
+                                        
 global_check2_dompf([C|RC],GC,AddedC,F) :-
-    is_dom_l(C,L,S,D,RorF),
+    is_dom_l(C,L,S,D,RorF),             % dompf-neq: dompf(S,D) & D neq {} --+-> dompf(S,D) & D neq {} & S neq {}
     var(S),var(D),\+member(1,L),
-    find_neq(D,GC),!,
-    trace_irules('dom-neq_dom'),
+    find_neq(D,GC),
+    !,
+    %trace_irules('dom-neq_dom'),
     add_dom_neq(RorF,S,D,AddedC,L,NewC),
     global_check2(RC,GC,NewC,F).
-                                        % dompf-neq: dompf(S,D) & S neq {} --> dompf(S,D) & D neq {} & S neq {}
 global_check2_dompf([C|RC],GC,AddedC,F) :-
-    is_dom_l(C,L,S,D,RorF),
+    is_dom_l(C,L,S,D,RorF),             % dompf-neq: dompf(S,D) & S neq {} --+-> dompf(S,D) & D neq {} & S neq {}
     var(S),var(D),\+member(1,L),
-    find_neq(S,GC),!,
-    trace_irules('dom-neq_rel'),
+    find_neq(S,GC),
+    !,
+    %trace_irules('dom-neq_rel'),
     add_dom_neqd(RorF,S,D,AddedC,L,NewC),
     global_check2(RC,GC,NewC,F).
-                                        % dompf-size: e.g., dompf(S,D) & size(S,N) -+-> size(D,N)
 global_check2_dompf([C|RC],GC,[solved(dompf(S,D),(var(S),var(D)),[2|L],f),
         size(S,N),size(D,N),integer(N)|NewC],F) :-
-    is_dom_l(C,L,S,D,pfun),
-    var(S),var(D),\+member(2,L),
-    find_size2(S,D,GC,N),!,
-    trace_irules('dompf-size'),
+    is_dom_l(C,L,S,D,pfun),             % dompf-size: dompf(S,D) & size(S,N) --+-> dompf(S,D) & size(S,N) & size(D,N)
+    var(S),var(D),\+member(2,L),        
+    find_size2(S,D,GC,N),
+    !,
+    %trace_irules('dompf-size'),
     global_check2(RC,GC,NewC,F).
-
-                                        % ran-neq: ran(S,D) & D neq {} --> ran(S,D) & D neq {} & S neq {}
+                                        
 global_check2_ran([C|RC],GC,[solved(ran(S,D),(var(S),var(D)),[1|L],f),S neq {}|NewC],F) :-
-    is_ran_l(C,L,S,D),
+    is_ran_l(C,L,S,D),                  % ran-neq: ran(S,D) & D neq {} --+-> ran(S,D) & D neq {} & S neq {}
     var(S),var(D),\+member(1,L),
-    find_neq(D,GC),!,
-    trace_irules('ran_var-neq_ran'),
-    global_check2(RC,GC,NewC,F).
-                                        % ran-neq: ran(S,{...}) --> ran(S,{...}) & S neq {}
+    find_neq(D,GC),
+    !,
+    %trace_irules('ran_var-neq_ran'),
+    global_check2(RC,GC,NewC,F).                                       
 global_check2_ran([C|RC],GC,[solved(ran(S,D),var(S),[],f),S neq {}|NewC],F) :-
-    C = ran(S,D),
-    var(S), nonvar(D), noran_elim,!,
-    trace_irules('ran_nonvar-neq_ran'),
+    C = ran(S,D),                       % (noran_elim) ran-neq: ran(S,{...}) --+-> ran(S,{...}) & S neq {}  
+    noran_elim,                          
+    var(S), nonvar(D),
+    !,
+    %trace_irules('ran_nonvar-neq_ran'),
     global_check2(RC,GC,NewC,F).
-                                        % ran-neq: ran(S,D) & S neq {} --> ran(S,D) & D neq {} & S neq {}
 global_check2_ran([C|RC],GC,[solved(ran(S,D),var(S),[1|L],f),D neq {}|NewC],F) :-
-    is_ran_l(C,L,S,D),
+    is_ran_l(C,L,S,D),                  % ran-neq: ran(S,D) & S neq {} --+-> ran(S,D) & S neq {} & D neq {} 
     var(S),var(D),\+member(1,L),
-    find_neq(S,GC),!,
-    trace_irules('ran-neq_rel'),
+    find_neq(S,GC),
+    !,
+    %trace_irules('ran-neq_rel'),
     global_check2(RC,GC,NewC,F).
-                                        % ran-size: e.g., ran(S,R) & size(S,N) -+-> size(R,M) & M =< N
 global_check2_ran([C|RC],GC,AddedC,F) :-
-    is_ran_l(C,L,S,R),
+    is_ran_l(C,L,S,R),                  % ran-size: ran(S,R) & size(S,N) --+-> ran(S,R) & size(S,N) & size(R,M) & M =< N
     var(S),var(R),\+member(2,L),
-    find_size2(S,R,GC,_),!,
-    trace_irules('ran-size'),
+    find_size2(S,R,GC,_),
+    !,
+    %trace_irules('ran-size'),
     solve_int(M =< N,IntC),
     add_ran_size(S,R,M,N,AddedC,L,NewC1),
     append(IntC,NewC2,NewC1),
     global_check2(RC,GC,NewC2,F).
-                                        % un-size:  e.g., un(X,Y,Z) & size(Z,N) -+->
-                                        %                 size(X,NX) & size(Y,NY) & size(Z,NZ) &
-                                        %                 NX =< NZ & NY =< NZ &NX + NY >= NZ
-/*global_check2_un([C|RC],GC,[solved(un(X,Y,Z),(var(X),var(Y),var(Z)),[1|L],f),
-                        size(X,NX),size(Y,NY),size(Z,NZ),
-                        integer(NX),integer(NY),integer(NZ)|NewC],F) :-
+
+global_check2_un([C|RC],GC,AddedC,f) :- % un-rel/pfun: un(X,Y,Z) & rel(Z)/pfun(Z) --+-> ...
     is_un_l(C,L,X,Y,Z),
     var(X), var(Y), var(Z),
-    \+member(1,L), find_size3(X,Y,Z,GC,_),!,
-    trace_irules('un-size'),
+    \+ member(2,L), find_rel_pfun(Z,GC,RorF),
+    !,
+    %trace_irules('un-pfun-dom'),
+    add_dom_un(RorF,X,Y,Z,AddedC,L,NewC),
+    global_check2(RC,GC,NewC,f).                                        
+global_check2_un([C|RC],GC,AddedC,f) :- % un-rel/pfun: un(X,Y,Z) & rel(Z)/pfun(Z) --+-> ...
+    is_un_l(C,L,X,Y,Z),
+    var(X), var(Y), var(Z),
+    \+ member(3,L), find_rel_pfun(Z,GC,RorF),
+    !,
+    %trace_irules('un-pfun-ran'),
+    add_ran_un(RorF,X,Y,Z,AddedC,L,NewC),
+    global_check2(RC,GC,NewC,f).
+   
+global_check2_un([C|RC],GC,[solved(un(X,Y,Z),(var(X),var(Y),var(Z)),[1|L],f),   
+                        size(X,NX),size(Y,NY),size(Z,NZ),
+                        integer(NX),integer(NY),integer(NZ)|NewC],F) :-
+    \+size_solver_on,                   % (size_solver_off) un-size:         
+    is_un_l(C,L,X,Y,Z),                 % e.g., un(X,Y,Z) & size(Z,N) --+-> un(X,Y,Z) & size(Z,N) &
+    var(X), var(Y), var(Z),             %                 size(X,NX) & size(Y,NY) & size(Z,NZ) &
+    \+member(1,L), find_size3(X,Y,Z,GC,_), %              NX =< NZ & NY =< NZ & NX + NY >= NZ
+    !,
+    %trace_irules('un-size'),
     solve_int(NX =< NZ,IntC1),
     solve_int(NY =< NZ,IntC2),
     solve_int(NX + NY >= NZ,IntC3),
     append(IntC1,IntC2,IntC12), append(IntC12,IntC3,IntC),
     append(IntC,RC,R3),
-    global_check2(R3,GC,NewC,F).*/
-
-%%%%%%%%%% union and relational constraints
-                                         % un-rel/pfun: un(X,Y,Z) & rel(Z)/pfun(Z) --> ...
-global_check2_un([C|RC],GC,AddedC,f) :-
-    is_un_l(C,L,X,Y,Z),
-    var(X), var(Y), var(Z),
-    \+ member(2,L), find_rel_pfun(Z,GC,RorF),
-    !,
-    trace_irules('un-pfun-dom'),
-    add_dom_un(RorF,X,Y,Z,AddedC,L,NewC),
-    global_check2(RC,GC,NewC,f).
-                                         % un-rel/pfun: un(X,Y,Z) & rel(Z)/pfun(Z) --> ...
-global_check2_un([C|RC],GC,AddedC,f) :-
-    is_un_l(C,L,X,Y,Z),
-    var(X), var(Y), var(Z),
-    \+ member(3,L), find_rel_pfun(Z,GC,RorF),
-    !,
-    trace_irules('un-pfun-ran'),
-    add_ran_un(RorF,X,Y,Z,AddedC,L,NewC),
-    global_check2(RC,GC,NewC,f).
+    global_check2(R3,GC,NewC,F).                                     
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%% auxiliary predicates for global_check
 
 is_un(un(X,Y,Z),_,X,Y,Z) :- !.
 is_un(solved(un(X,Y,Z),_,Lev,_),Lev,X,Y,Z).
+is_un(delay(un(X,Y,Z),_),_,X,Y,Z).
+
 is_un_l(un(X,Y,Z),[],X,Y,Z) :- !.
-is_un_l(solved(un(X,Y,Z),_,L,_),L,X,Y,Z).
+is_un_l(solved(un(X,Y,Z),_,Lev,_),Lev,X,Y,Z).
+is_un_l(delay(un(X,Y,Z),_),[],X,Y,Z).
 
-is_sub(subset(X,Y),_,X,Y) :- !.
+is_sub(subset(X,Y),_,X,Y).
 
-is_inters(inters(X,Y,Z),_,X,Y,Z) :- !.
+is_inters(inters(X,Y,Z),_,X,Y,Z).
+
+is_diff(diff(X,Y,Z),_,X,Y,Z).
 
 is_size(size(X,N),_,X,N) :- !.
 is_size(solved(size(X,N),_,Lev,_),Lev,X,N) :- !.
-is_size(delay( (size(X,N) & true), _),_,X,N).
-%is_size(delay( (irreducible(size(X,N)) & true), _),_,X,N) :-
+%is_size(delay( (size(X,N) & true), _),_,X,N).
 
 is_sum(sum(X,N),_,X,N) :- !.
 is_sum(solved(sum(X,N),_,Lev,_),Lev,X,N).
@@ -6676,7 +7047,7 @@ is_max(solved(smax(X,N),_,Lev,_),Lev,X,N).
 is_neq(X neq Y,_,X,Y) :- !.
 is_neq(solved(X neq Y,_,Lev,_),Lev,X,Y).
 
-is_nin(X nin Y,_,X,Y) :- !.
+is_nin(X nin Y,_,X,Y).
 
 is_in(X in Y,_,X,Y) :- !.
 is_in(solved(X in Y,_,Lev,_),Lev,X,Y) :- !.
@@ -6689,16 +7060,16 @@ is_dom_l(solved(dompf(X,N),_,L,_),L,X,N,pfun).
 is_ran_l(ran(X,N),[],X,N) :- !.
 is_ran_l(solved(ran(X,N),_,L,_),L,X,N).
 
-is_inv(inv(X,Y),_,X,Y) :- !.
+is_inv(inv(X,Y),_,X,Y).
 
 is_comp(comp(X,Y,Z),_,X,Y,Z) :- !.
 is_comp(comppf(X,Y,Z),_,X,Y,Z) :- !.
 
-is_id(id(X,Y),_,X,Y) :- !.
+is_id(id(X,Y),_,X,Y).
 
-is_rel(rel(X),_,X) :- !.
+is_rel(rel(X),_,X).
 
-is_pfun(pfun(X),_,X) :- !.
+is_pfun(pfun(X),_,X).
 
 has_ris(RIS = E,_,D) :-
     ris_term(RIS,ris(_ in D,_,_,_,_)), var(D),
@@ -6710,33 +7081,36 @@ has_ris2(RIS1 = RIS2,_,D1,D2) :-
     ris_term(RIS1,ris(_ in D1,_,_,_,_)), var(D1),
     ris_term(RIS2,ris(_ in D2,_,_,_,_)), var(D2),!.
 
-%%%%%% searching constraints in the entire CS
+%%%%%% search a constraint in the CS (called with 2nd parm. GC)
 
-find_neq(Int,cs([I neq E|_],_)) :-
-    nonvar(E), is_empty(E), I == Int,!.
-find_neq(Int,cs([_|R],Others)) :-
-    find_neq(Int,cs(R,Others)).
-
-find_setconstraint(X,cs(_,[C|_])) :-         % un(X,Y,Z) or un(ris(...),Y,Z) or un(cp(A,B),Y,Z) or ... is in the CS
+find_setconstraint(X,cs(_,[C|_])) :-      % un(X,Y,Z) or un(ris(...),Y,Z) or un(cp(A,B),Y,Z) or ... is in the CS
     is_un_l(C,_,S1,S2,S3),
     var_ris_st(S1,S1Var), var_ris_st(S2,S2Var), var_ris_st(S3,S3Var),
     (X == S1Var,! ; X == S2Var,! ; X == S3Var),!.
 find_setconstraint(X,cs(_,[C|_])) :-
-    is_sub(C,_,S1,S2),                   % subset(X,t) or subset(ris(...),t) or subset(cp(A,B),t) is in the CS
+    is_sub(C,_,S1,S2),                    % subset(X,Y) or subset(ris(...),Y) or subset(cp(A,B),Y) is in the CS
     var_ris_st(S1,S1Var), var_ris_st(S2,S2Var),
     (X == S1Var,! ; X == S2Var),!.
 find_setconstraint(X,cs(_,[C|_])) :-
-    is_sub(C,_,S1,_S2),                   % subset(X,t) or subset(ris(...),t) or subset(cp(A,B),t) or ... is in the CS
+    is_sub(C,_,S1,_S2),                   % subset(X,t) or subset(ris(...),t) or subset(cp(A,B),t) is in the CS
     var_ris_st(S1,S1Var),
     X == S1Var,!.
 find_setconstraint(X,cs(_,[C|_])) :-
-    is_inters(C,_,S1,_S2,S3),             % inters(X,t,Z) or inters(ris(...),t,Z) intersun(cp(A,B),t,Z) or ...  is in the CS
+    is_inters(C,_,S1,_S2,S3),             % inters(X,t,Z) or inters(ris(...),t,Z) or inters(cp(A,B),t,Z) is in the CS
     var_ris_st(S1,S1Var), var_ris_st(S3,S3Var),
     (X == S1Var,! ; X == S3Var),!.
 find_setconstraint(X,cs(_,[C|_])) :-
-    is_inters(C,_,_S1,S2,S3),             % inters(X,t,Z) or inters(ris(...),t,Z) intersun(cp(A,B),t,Z) or ...  is in the CS
+    is_inters(C,_,_S1,S2,S3),             % inters(t,Y,Z) or inters(t,ris(...),Z) or inters(t,cp(A,B),Z) is in the CS
     var_ris_st(S2,S2Var), var_ris_st(S3,S3Var),
     (X == S2Var,! ; X == S3Var),!.
+find_setconstraint(X,cs(_,[C|_])) :-      % size(X,n) or size(cp(A,B),n) is in the CS  
+    is_size(C,_,S1,_),             
+    var_ris_st(S1,S1Var),
+    X == S1Var,!.
+find_setconstraint(X,cs(_,[C|_])) :-
+    is_diff(C,_,S1,S2,S3),               % diff(X,Y,Z) or diff(ris(...),Y,Z) or diff(cp(A,B),Y,Z) or ... is in the CS
+    var_ris_st(S1,S1Var), var_ris_st(S2,S2Var), var_ris_st(S3,S3Var),
+    (X == S1Var,! ; X == S2Var,! ; X == S3Var),!.
 find_setconstraint(X,cs(_,[C|_])) :-
     is_dom_l(C,_,S1,S2,_),                % dom(X,Y) or dom(ris(...),Y) or dom(cp(A,B),Y) or ... is in the CS
     var_ris_st(S1,S1Var), var_ris_st(S2,S2Var),
@@ -6747,7 +7121,7 @@ find_setconstraint(X,cs(_,[C|_])) :-
     var_ris_st(S1,S1Var),
     X == S1Var,!.
 find_setconstraint(X,cs(_,[C|_])) :-
-    is_ran_l(C,_,S1,S2),                 % ran(X,t) or ran(ris(...),t) or ran(cp(A,B),t) or ... is in the CS
+    is_ran_l(C,_,S1,S2),                  % ran(X,t) or ran(ris(...),t) or ran(cp(A,B),t) or ... is in the CS
     var_ris_st(S1,S1Var), var_ris_st(S2,S2Var),
     (X == S1Var,! ; X == S2Var),!.
 find_setconstraint(X,cs(_,[C|_])) :-
@@ -6788,21 +7162,29 @@ find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
     var_ris_st(S1,S1Var), var_ris_st(S2,S2Var), var_ris_st(S3,S3Var),
     one_of3(X,Y,S1Var,S2Var,S3Var,Z1,Z2),!.
 find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
-    is_sub(C,_,S1,S2),                    % subset(X,t,Z) or subset(ris(...),t,Z) subset(cp(A,B),t,Z) or ... is in the CS?
+    is_sub(C,_,S1,S2),                     % subset(X,Y) or subset(ris(...),Y) or subset(cp(A,B),Y) is in the CS?
     var_ris_st(S1,S1Var), var_ris_st(S2,S2Var),
     one_of2(X,Y,S1Var,S2Var,Z1,Z2),!.
 find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
-    is_sub(C,_,S1,_S2),                    % subset(X,t,Z) or subset(ris(...),t,Z) subset(cp(A,B),t,Z)  is in the CS?
+    is_sub(C,_,S1,_S2),                    % subset(X,t) or subset(ris(...),t) or subset(cp(A,B),t,Z) or is in the CS?
     var_ris_st(S1,S1Var),
     one_of1(X,Y,S1Var,Z1,Z2),!.
 find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
-    is_inters(C,_,S1,_S2,S3),              % inters(X,t,Z) or inters(ris(...),t,Z) inters(cp(A,B),t,Z) or ... is in the CS?
+    is_inters(C,_,S1,_S2,S3),              % inters(X,t,Z) or inters(ris(...),t,Z) or inters(cp(A,B),t,Z) or is in the CS?
     var_ris_st(S1,S1Var), var_ris_st(S3,S3Var),
     one_of2(X,Y,S1Var,S3Var,Z1,Z2),!.
 find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
-    is_inters(C,_,_S1,S2,S3),              % inters(X,t,Z) or inters(ris(...),t,Z) inters(cp(A,B),t,Z) or ... is in the CS?
+    is_inters(C,_,_S1,S2,S3),              % inters(X,t,Z) or inters(ris(...),t,Z) inters(cp(A,B),t,Z) or is in the CS?
     var_ris_st(S2,S2Var), var_ris_st(S3,S3Var),
     one_of2(X,Y,S2Var,S3Var,Z1,Z2),!.
+find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-  % size(X,n) or size(cp(A,B),n) is in the CS   
+    is_size(C,_,S1,_),             
+    var_ris_st(S1,S1Var),
+    one_of1(X,Y,S1Var,Z1,Z2),!.
+find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
+    is_diff(C,_,S1,S2,S3),                   % diff(X,Y,Z) or diff(ris(...),Y,Z) or diff(cp(A,B),Y,Z) or ... is in the CS?
+    var_ris_st(S1,S1Var), var_ris_st(S2,S2Var), var_ris_st(S3,S3Var),
+    one_of3(X,Y,S1Var,S2Var,S3Var,Z1,Z2),!.
 find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
     is_dom_l(C,_,S1,S2,_),                 % dom(X,Y) or dompf(Y,X) is in the CS?
     var_ris_st(S1,S1Var), var_ris_st(S2,S2Var),
@@ -6813,7 +7195,7 @@ find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
     var_ris_st(S1,S1Var),
     one_of1(X,Y,S1Var,Z1,Z2),!.
 find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
-    is_ran_l(C,_,S1,S2),                  % ran(X,Y) or ran(Y,X) is in the CS?
+    is_ran_l(C,_,S1,S2),                   % ran(X,Y) or ran(Y,X) is in the CS?
     var_ris_st(S1,S1Var), var_ris_st(S2,S2Var),
     one_of2(X,Y,S1Var,S2Var,Z1,Z2),!.
 find_setconstraint(X,Y,cs(_,[C|_]),Z1,Z2) :-
@@ -6864,13 +7246,18 @@ one_of2(X,Y,_,S2,Y,X) :- Y == S2.
 one_of1(X,Y,S1,X,Y) :- X == S1,!.
 one_of1(X,Y,S1,Y,X) :- Y == S1.
 
+find_neq(Int,cs([I neq E|_],_)) :-
+    nonvar(E), is_empty(E), I == Int,!.
+find_neq(Int,cs([_|R],Others)) :-
+    find_neq(Int,cs(R,Others)).
+
 find_nin(X,cs(_,[C|_]),T) :-        % T nin X is in the CS
     is_nin(C,_,T,Y),
     X == Y,!.
 find_nin(X,cs(Neqs,[_|R]),T) :-
     find_nin(X,cs(Neqs,R),T).
 
-find_in(X,cs(_,[C|_]),T) :-        % T in X is in the CS
+find_in(X,cs(_,[C|_]),T) :-         % T in X is in the CS
     is_in(C,_,T,Y),
     X == Y,!.
 find_in(X,cs(Neqs,[_|R]),T) :-
@@ -6888,7 +7275,7 @@ find_size3(X,Y,Z,cs(_,[C|_]),N) :-  % size(X,N) or size(Y,N) or size(Z,N) is in 
 find_size3(X,Y,Z,cs(Neqs,[_|R]),M) :-
     find_size3(X,Y,Z,cs(Neqs,R),M).
 
-find_rel(X,cs(_,[C|_])) :-          % rel(X) is in the CS
+find_rel(X,cs(_,[C|_])) :-          % rel(X) is in the CS 
     is_rel(C,_,Y),
     X == Y,!.
 find_rel(X,cs(Neqs,[_|R])) :-
@@ -6903,13 +7290,19 @@ find_pfun(X,cs([_|R],Others)) :-
 find_rel_pfun(X,CS,RorF) :-         % either rel(X) or pfun(X) is in the CS
     (find_rel(X,CS),!, RorF=rel ; find_pfun(X,CS), RorF=pfun).
 
-%%%%%% searching constraints in the rest of the CS
+%%%%%% search a constraint in the rest of the CS (called with 2nd parm RC (from [C|RC]))
 
 find_un2(X,Y,[C|_],S3) :-           % un(X,Y,_Z) or un(Y,X,_Z) is in the CS
     is_un_l(C,_,S1,S2,S3),
     (X == S1, Y == S2,! ; X == S2, Y == S1),!.
 find_un2(X,Y,[_|R],S3) :-
     find_un2(X,Y,R,S3).
+
+find_diff(X,Y,[C|_],S3) :-          % diff(X,Y,_Z) is in the CS
+    is_diff(C,_,S1,S2,S3),
+    X == S1, Y == S2,!.
+find_diff(X,Y,[_|R],S3) :-
+    find_diff(X,Y,R,S3).
 
 find_size(X,[C|_],N) :-             % size(X,N) is in the CS
     is_size(C,_,S,N),
@@ -6955,8 +7348,8 @@ type_constr(C) :-
     ;
         n_type_constr(C) ->
         true
-    ;
-        C=delay(T,_), type_constr(T)
+%    ;
+%        C=delay(T,_), type_constr(T)     
     ).
 
 p_type_constr(set(_)).                     % positive type constraints
@@ -7055,24 +7448,76 @@ add_ran_size(S,R,M,N,AddedC,L,NewC) :-
     AddedC = [solved(ran(S,R),(var(S),var(R)),[2|L],f),
         size(S,N),size(R,M),integer(N),integer(M)|NewC].
 
+%%%%% Creating a set of at least N distinct variables, e.g. {X_1,...,X_N/R} with X_1 neq X_2 & ... & X_N-1 neq X_N
+mk_set_atleastN_var(N,T,Sfin,C) :-             
+   mk_set_atleastN_var(N,T,T,Sfin,C).
+mk_set_atleastN_var(0,_,S,S,[]) :- !.          
+mk_set_atleastN_var(N,T,Sin,Sout,[X nin T|C]) :-
+    M is N-1,
+    all_diff_set_var(Sin,X,C1),
+    mk_set_atleastN_var(M,T,Sin with X,Sout,C2),
+    append(C1,C2,C).
+
+all_diff_set_var(R,_,[]) :-    
+    var(R),!.
+all_diff_set_var({},_,[]) :-!.
+all_diff_set_var(R with Z,X,[X neq Z|CR]) :-
+    all_diff_set_var(R,X,CR).
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%           Level 3           %%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%  Labeling and final check   %%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-final_sat(C,SFC) :-
+final_sat([],[]) :- !.
+final_sat(C,SFC) :-    
     trace_in(C,3),
     final_sat1(C,SFC0),
     final_sat2(SFC0,SFC),
     trace_out(SFC,3).
 
+final_solve([],[]) :- !.    
+final_solve(C,SFC) :-
+    final_sat(C,SFC1),
+    nb_getval(fix_size,Fix),     
+    nb_getval(show_min,Show),     
+    (size_solver_on, (Fix == on,! ; Show == on) ->
+       get_size_vars_min(SFC1,SFC1,LVars),    
+       (LVars == [] -> 
+            SFC=SFC1
+       ;
+            copy_term(formula(SFC1,LVars),formula(C1,LVars1),AttrGoalList),       
+            maplist(call,AttrGoalList),                                          
+            sat_check(C1),          
+            mk_disq(LVars,LVars1,D),
+            append(D,SFC1,SFC2),
+            nb_setval(deep_check_size,off),
+            (Fix == on ->
+                  sat(SFC2,SFC,f)   
+             ;
+                  SFC=SFC2
+            )              
+       )
+    ;
+       SFC=SFC1  
+    ). 
+
+sat_check(C) :-		    % check if C is satisfiable (one solution is enough)
+    nb_setval(deep_check_size,on),  
+    sat(C,_,f),!,
+    nb_setval(deep_check_size,off).          
+
 final_sat1([],[]) :-!.
 final_sat1(C,SFC) :-
     sat_empty_intv(C,CC),
-    %write(CC),nl,
-    finalize_int_constr(CC),           %finalize integer constraint processing
-    sat(CC,RevC,f),                    %call the constraint solver (in 'final' mode);
-    final_sat_cont(RevC,CC,SFC).
+    finalize_int_constr(CC,LIntVars),  %finalize integer constraint processing
+    (LIntVars == [] ->                    
+         SFC=C
+    ;
+         sat(CC,RevC,f),                    %call the constraint solver (in 'final' mode);
+         final_sat_cont(RevC,CC,SFC)
+    ).
 
 final_sat_cont(RevC,C,RevC) :-
     RevC == C,!.
@@ -7081,7 +7526,7 @@ final_sat_cont(RevC,_C,SFC) :-           %RevC is the resulting constraint;
 
 final_sat2([],[]) :-!.
 final_sat2(C,SFC) :-
-    finalize_int_constr(C),            %finalize integer constraint processing
+    finalize_int_constr(C,_),            %finalize integer constraint processing
     set_final,
     sat(C,RevC,f),                     %call the constraint solver (in 'final' mode);
     final_sat_cont2(RevC,C,SFC).
@@ -7112,6 +7557,39 @@ set_final :-
 set_final :-
     assertz(final).
 
+get_size_vars_min(RevC,GC,LVars) :- 
+    nb_setval(sum_min,0),
+    get_size_vars_min1(RevC,GC,LVars).
+
+get_size_vars_min1([],_,[]).      
+get_size_vars_min1([C|RevC],GC,[N|LVars]) :-
+    is_size(C,_,_S,N),!,   
+    minimize(GC,N,M),         %GFR DA MIGLIORARE per evitare che la minimize riscandisca ogni volta GC
+    nb_getval(sum_min,Sum),   %sum_min is the sum of minimum   
+    Sum1 is Sum + M,
+    nb_setval(sum_min,Sum1),  
+
+    get_size_vars_min1(RevC,GC,LVars).
+get_size_vars_min1([_C|RevC],GC,LVars) :-
+    get_size_vars_min1(RevC,GC,LVars).
+
+mk_disq([],[],[]) :- !.   % ex. mk_disq([X,Y,Z],[2,N,4],R) --> R=[X >= 2,Z >= 4]
+mk_disq([_|Vars],[V|Vars1],R) :-
+    var(V),!,
+    mk_disq(Vars,Vars1,R).
+mk_disq([X|Vars],[_|Vars1],R) :-
+    nonvar(X),!,
+    mk_disq(Vars,Vars1,R).
+mk_disq([X|Vars],[V|Vars1],NewR) :-    
+    nb_getval(fix_size,M), M == off,!,
+    solve_int(X >= V,IntC),
+    append(IntC,R,NewR),
+    mk_disq(Vars,Vars1,R).
+mk_disq([X|Vars],[V|Vars1],[X = V|R]) :- 
+    %nb_getval(fix_size,M), M == on,
+    mk_disq(Vars,Vars1,R).
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -7119,6 +7597,9 @@ set_final :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+int_solver(Slv) :-    
+    b_getval(int_solver,Slv).
 
 solve_int(Constr,NewC) :-        % solve the integer constraint 'Constr' using
     int_solver(clpfd),!,      % either the clp(FD) solver
@@ -7164,7 +7645,6 @@ is_int_var(X) :-
     int_solver(clpfd),!,
     is_fd_var(X).
 is_int_var(X) :-
-%   var(X).
     attvar(X).
 
 check_int_constr(X,Y) :-
@@ -7173,13 +7653,23 @@ check_int_constr(X,Y) :-
 check_int_constr(X,Y) :-
     check_q_constr(X,Y).
 
-finalize_int_constr(C) :-
+finalize_int_constr(C,LIntVars) :-    
     int_solver(clpfd),!,
-    check_domain(C,L),
-    labeling_FD(L).
-finalize_int_constr(C) :-
+    check_domain(C,LIntVars),
+    labeling_FD(LIntVars).
+finalize_int_constr(C,LIntVars) :-
     %int_solver(clpq),
-    check_int_solutions(C).
+    check_int_solutions(C,LIntVars).
+
+minimize(_C,N,M) :-         
+    int_solver(clpfd),!,
+    minimize_FD(N),
+    nb_getval(min,M).
+minimize(C,N,M) :-    
+    int_solver(clpq),!,
+    collect_integer(C,LIntVars),
+    %DBG write('integer vars: '),write(LIntVars),nl,
+    bb_inf(LIntVars,N,M,_).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -7296,6 +7786,20 @@ check_domain(C,[X|L]) :-                  %to collect all integer variables that
     check_domain(CRest,L).
 check_domain(_,[]).
 
+minimize_FD(N) :-     
+    nat_try(N,M),
+    nb_setval(min,M),
+    fail.
+minimize_FD(_N).
+ 
+nat_try(N,X) :-    
+    nat_num(0,X),
+    N #= X,!.
+
+nat_num(N,N).      
+nat_num(N,M) :-
+     N1 is N+1,
+     nat_num(N1,M).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%     clp(Q) constraints
@@ -7304,9 +7808,9 @@ check_domain(_,[]).
 :- use_module(library(clpq)).
 
 solve_Q(Constr,NewC) :-             % solve the constraint 'Constr' using the CLP(Q) solver
-    %%%write(solve_Q(Constr)),nl,
+    %%%DBG write(solve_Q(Constr)),nl,
     rho(Constr,Q_Constr,NewC),
-    %%%write(rho(Constr,Q_Constr,NewC)),nl,
+    %%%DBG write(rho(Constr,Q_Constr,NewC)),nl,
     call(Q_Constr).
 
 q_expr(X,E) :-
@@ -7333,7 +7837,7 @@ rho(X neq Y,{CLPq_constr1 ; CLPq_constr2},NewC) :- !,
     norm(X > Y,CLPq_constr2,NewC2),
     append(NewC1,NewC2,NewC).
     %write('CLPQ : '),write(neq(CLPq_constr1,CLPq_constr2)),nl.
-rho(T in int(A,B),{CLPq_constr1,CLPq_constr2},NewC) :- !,
+rho(T in int(A,B),{CLPq_constr1,CLPq_constr2},[glb_state(T >= A),glb_state(T =< B)|NewC]) :- !,
     norm(T >= A,CLPq_constr1,NewC1),
     norm(B >= T,CLPq_constr2,NewC2),
     append(NewC1,NewC2,NewC).
@@ -7348,6 +7852,8 @@ norm((C1,RC),NormC,NewC) :- !,       %first clause: not used
 norm((C1),NormC,NewC) :-
     single_norm(C1,NormC,NewC).
 
+%single_norm(N>M,(N>M),[]) :-  %ottimizzazione; aggiungere anche per >= ...; meglio farlo nella rho senza aggiungere glb_state
+%    integer(N),integer(M),!.
 single_norm(X>Y,(X=Y+K,K>=1),[integer(K)]) :-
     var(X),var(Y),!.
 single_norm(X>N,(X=N+K,K>=1),[integer(K)]) :-
@@ -7381,7 +7887,7 @@ qconstr_app((C1,R1),B,(C1,R3)) :- !,
     qconstr_app(R1,B,R3).
 qconstr_app((C1),B,(C1,B)).
 
-check_int_solutions(C) :-
+check_int_solutions(C,LIntVars) :-   
     collect_integer(C,LIntVars),
     bb_inf_all(LIntVars,LIntVars).
 
@@ -7390,20 +7896,27 @@ collect_integer(C,LIntVars) :-             %to collect in LIntVars all attribute
     collect_integer_test(X,LIntVars1,LIntVars),
     collect_integer(CRest,LIntVars1).
 collect_integer(_,[]).
+
 collect_integer_test(X,LIntVars,[X|LIntVars]) :-
     attvar(X),!.
 collect_integer_test(_X,LIntVars,LIntVars).
 
 bb_inf_all([],_) :- !.
-bb_inf_all(L,[X|_R]) :-
-    bb_inf_single(L,X),!.
-bb_inf_all(L,[_X|R]) :-
-    bb_inf_all(L,R).
+bb_inf_all(L,_X) :-
+     bb_inf(L,1,_,_).
 
-bb_inf_single(L,X) :-
-    {X>=0},bb_inf(L,X,_,_).
-bb_inf_single(L,X) :-
-    {X<0},bb_inf(L,-X,_,_).
+%bb_inf_all([],_) :- !.
+%bb_inf_all(L,[X|_R]) :-
+%    bb_inf_single(L,X),!.
+%bb_inf_all(L,[_X|R]) :-
+%    bb_inf_all(L,R).
+
+%bb_inf_single(L,X) :-
+%    {X>=0},bb_inf(L,X,_,_).
+%    {X>=(-2147483648)},bb_inf(L,X,_,_).
+%    bb_inf(L,X,_,_).
+%bb_inf_single(L,X) :-
+%    {X<0},bb_inf(L,-X,_,_).
 
 labeling_Q(_) :-                     % if nolabel, do nothing
     nolabel,!.
@@ -7439,9 +7952,6 @@ isetlog((ninters(A,B,C) :-
     (X in C & X nin A & true or
      X in C & X nin B & true or
      X in A & X in B & X nin C) & true),sys) :-!.
-isetlog((diff(A,B,C) :-
-    set(A) & set(B) & set(C) & set(D) &
-    subset(C,A) & un(B,C,D) & subset(A,D) & disj(B,C) & true),sys) :-!.
 isetlog((ndiff(A,B,C) :-
     set(A) & set(B) & set(C) & set(D) &
     diff(A,B,D) & D neq C & true),sys) :-!.
@@ -7533,13 +8043,6 @@ preproc([A|X],[A1|X],[list(X)|C]) :-
 preproc((A & B),(A1 & B1),C) :-
     !, preproc(A,A1,C1), preproc(B,B1,C2),
     append(C1,C2,C).
-%preproc((A or B),(A1 or B1),[]) :-
-%   !, preproc(A,PA,C1),
-%   list_to_conj(CC1,C1),
-%   conj_append(PA,CC1,A1),
-%   preproc(B,PB,C2),
-%   list_to_conj(CC2,C2),
-%   conj_append(PB,CC2,B1).
 preproc((A or B),(A1 or B1),C) :-
     !, preproc(A,A1,C1), preproc(B,B1,C2),
     append(C1,C2,C).
@@ -7745,15 +8248,51 @@ is_nforeach(nforeach(D,P,Fo,FP),nforeach(D1,P,Fo1,FP1),C) :-
 
 cp_preproc(cp(A,B),cp(A,B),[set(A),set(B)]) :-
     var(A),var(B),!.
+cp_preproc(cp(A,B),cp(A1,B1),Constrs) :-  %A=cp(_,_), B=cp(_,_)
+    nonvar(A), A = cp(_,_),
+    nonvar(B), B = cp(_,_),!,
+    cp_preproc(A,A1,Constrs1),
+    cp_preproc(B,B1,Constrs2),
+    append(Constrs1,Constrs2,Constrs).
+cp_preproc(cp(A,B),cp(A1,B1),Constrs) :-  %A=cp(_,_)
+    nonvar(A), A = cp(_,_),!,
+    cp_preproc(A,A1,Constrs1),
+    preproc(B,B1,Constrs2),
+    append(Constrs1,Constrs2,Constrs).
+cp_preproc(cp(A,B),cp(A1,B1),Constrs) :-  %B=cp(_,_)
+    nonvar(B), B = cp(_,_),!,
+    preproc(A,A1,Constrs1),
+    cp_preproc(B,B1,Constrs2),
+    append(Constrs1,Constrs2,Constrs).
 cp_preproc(cp(A,B),cp(A,B1),[set(A)|Constrs]) :-
     var(A),!,  %nonvar(B)
-    set_preproc(B,B1,Constrs).
+    (B = cp(_,_) -> 
+         cp_preproc(B,B1,Constrs)
+    ;
+         set_preproc(B,B1,Constrs)
+    ).
 cp_preproc(cp(A,B),cp(A1,B),[set(B)|Constrs]) :-
     var(B),!,  %nonvar(A)
-    set_preproc(A,A1,Constrs).
+    (A = cp(_,_) ->
+         cp_preproc(A,A1,Constrs)
+    ;
+         set_preproc(A,A1,Constrs)
+    ).
 cp_preproc(cp(A,B),cp(A1,B1),Constrs) :-  %nonvar(A), nonvar(B)
-    set_preproc(A,A1,Constrs1),
-    set_preproc(B,B1,Constrs2),
+    set_preproc(A,A1,Constrs1),!,
+    (B = cp(_,_) ->
+         cp_preproc(B,B1,Constrs2)
+    ;
+         set_preproc(B,B1,Constrs2)
+    ),
+    append(Constrs1,Constrs2,Constrs).
+cp_preproc(cp(A,B),cp(A1,B1),Constrs) :-  %nonvar(A), nonvar(B)
+    set_preproc(B,B1,Constrs2),!,
+    (A = cp(_,_) -> 
+         cp_preproc(A,A1,Constrs1)
+    ;
+         set_preproc(A,A1,Constrs1)
+    ),
     append(Constrs1,Constrs2,Constrs).
 cp_preproc(_,_,_) :-
     msg_sort_error(cp),
@@ -7807,11 +8346,13 @@ gen_type_constrs(ndisj(T1,T2),[set(T1),set(T2)]) :- !.
 gen_type_constrs(subset(T1,T2),[set(T1),set(T2)]) :- !.
 gen_type_constrs(ssubset(T1,T2),[set(T1),set(T2)]) :- !.
 gen_type_constrs(inters(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
+gen_type_constrs(diff(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
+%
 gen_type_constrs(size(T1,T2),[set(T1),integer(T2)]) :- !.
 gen_type_constrs(sum(T1,T2),[set(T1),integer(T2)]) :- !.
 gen_type_constrs(smin(T1,T2),[set(T1),integer(T2)]) :- !.
 gen_type_constrs(smax(T1,T2),[set(T1),integer(T2)]) :- !.
-
+%
 gen_type_constrs(dom(T1,T2),[rel(T1),set(T2)]) :- !.
 gen_type_constrs(ran(T1,T2),[rel(T1),set(T2)]) :- !.
 gen_type_constrs(comp(T1,T2,T3),[rel(T1),rel(T2),rel(T3)]) :- !.
@@ -7824,11 +8365,11 @@ gen_type_constrs(rres(T1,T2,T3),[rel(T1),set(T2),rel(T3)]) :- !.
 gen_type_constrs(dares(T1,T2,T3),[set(T1),rel(T2),rel(T3)]) :- !.
 gen_type_constrs(rares(T1,T2,T3),[rel(T1),set(T2),rel(T3)]) :- !.
 gen_type_constrs(oplus(T1,T2,T3),[rel(T1),rel(T2),rel(T3)]) :- !.
-
+%
 gen_type_constrs(ndom(T1,T2),[set(T1),set(T2)]) :- !.
 gen_type_constrs(ninv(T1,T2),[set(T1),set(T2)]) :- !.
 gen_type_constrs(ncomp(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
-
+%
 gen_type_constrs(nran(T1,T2),[set(T1),set(T2)]) :- !.
 gen_type_constrs(ndres(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
 gen_type_constrs(nrres(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
@@ -7836,11 +8377,11 @@ gen_type_constrs(ndares(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
 gen_type_constrs(nrares(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
 gen_type_constrs(nrimg(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
 gen_type_constrs(noplus(T1,T2,T3),[set(T1),set(T2),set(T3)]) :- !.
-
+%
 gen_type_constrs(id(T1,T2),[set(T1),rel(T2)]) :- !.
 %gen_type_constrs(apply(F,_,_),[pfun(F)]) :- !.
 gen_type_constrs(apply(F,_,_),[delay(pfun(F),false)]) :- !.
-
+%
 gen_type_constrs(nid(T1,T2),[set(T1),set(T2)]) :- !.
 gen_type_constrs(napply(F,_,_),[set(F)]) :- !.
 
@@ -8017,7 +8558,7 @@ ruq_in_clause(H,H).
 
 ruq_in_goal(Goal,NewGoal) :-
     rewrite_goal(Goal,NewGoal).
-%DBG%     write('***NEW GOAL:***'), write(NewGoal), nl.   % only for debugging
+    %DBG write('***NEW GOAL:***'), write(NewGoal), nl.   % only for debugging
 
 rewrite_goal(G,NewG) :-
     filter_on,!,
@@ -8704,7 +9245,7 @@ aggr_comps(R with X,X,R) :- !.    % set
 aggr_comps(R mwith X,X,R) :- !.   % bag
 aggr_comps([X | R],X,R).          % list
 
-%first_rest(+S,-X,-R,-C)                 NEW 31.12.2019
+%first_rest(+S,?X,-R,-C)               
 first_rest(R with X,X,R,[]) :- !.     % first_rest(S,X,R,C): true if: S is a not-empty set (interval, RIS, CP)
 first_rest(int(X,B),X,R,[]) :-        % R is S without its first component and
     integer(X), integer(B),       % X is the first component of S and C is the list of computed constraints
@@ -8856,6 +9397,13 @@ find_corr(X,Y,[_|R],[_|S]) :-
 %ex. find_corr_list([X|V],Y,[V,X,W],[A,B,C]) --> Y = [B|A]
 %ex. find_corr_list(V with X,Y,[V,X,W],[A,B,C]) --> Y = A with B
 %
+%find_corr_list(+X0,+T,+Vars,+VarsNew) --> find_corr_list(X0,N,Vars,VarsNew), N=T
+%ex. find_corr_list([A,N],[{},M1],[N,A],[V1,V2]) --> M1 = V1, V2 = {}.
+%
+find_corr_list(X0,T,Vars,VarsNew) :-    %NEW
+    nonvar(T),!,
+    find_corr_list(X0,N,Vars,VarsNew),
+    N = T.
 find_corr_list(X0,X,Vars,VarsNew) :-
     var(X0),
     !,
@@ -9019,16 +9567,31 @@ conj_append(X,Cj2,(X & Cj2)).
 %%%%%%%%%%%%%%%%% Configuration parameters %%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%%%%%%%%%% file names
+
 %%% path name to the working directory (default: '.')
 %path('').
-:- 	prolog_load_context(directory, Directory0),
-	atom_concat(Directory0, '/', Directory),
-	assertz(path(Directory)).
+:-  prolog_load_context(directory, Directory0),
+    atom_concat(Directory0, '/', Directory),
+    assertz(path(Directory)).
 
-%%% filtering rules library (default: 'setlog_rules.pl')
+%%% filtering rules library file (default: 'setlog_rules.pl')
 rw_rules('setlog_rules.pl').
 
-%%% the {log} atom selection strategy (default: cfirst)
+%%% advanced size solver file (default: 'size_solver.pl')   
+size_solver_file('size_solver.pl').
+
+%%%%%%%%%% constraint solving strategies
+
+%%% constraint solvers for integer expressions (default: clpfd)
+default_int_solver(clpfd).        % clp(FD) constraint solver
+%default_int_solver(clpq).        % clp(Q) constraint solver   
+
+%%% constraint solving mode (default: 'prover' if size_solver_off; 'solver' if size_solver_on)
+%default_mode(solver).            % always compute variable substitutions
+default_mode(prover).             % don't compute variable substitutions if not necessary
+
+%%% the atom selection strategy (default: cfirst)
 strategy(cfirst).                 % "constraint first"
 %strategy(ordered).               % as they occur in the formula
 %strategy(cfirst(UserPredList)).  % UserPredList is a list of user defined predicates to be
@@ -9036,45 +9599,51 @@ strategy(cfirst).                 % "constraint first"
                                   % user-defined predicates)
                                   % e.g., strategy(cfirst([ttf_list(_),ttf_nat(_),ttf_int(_),ttf_btype(_)])).
 
-%%% constraint solvers for integer expressions (default: clpfd)
-default_int_solver(clpfd).        % clp(FD) constraint solver
-%default_int_solver(clpq).        % clp(Q) constraint solver
-
 %%% the labeling strategy for the clp(FD) solver (default: the default clp(FD) strategy)
 fd_labeling_strategy([]).
 %fd_labeling_strategy([ff]).
 %fd_labeling_strategy([bisect]).
 %fd_labeling_strategy([ff,down,enum]).
 
-%%% type constraints to be printed in the computed answer (default: all)
-type_constraints_to_be_shown([set(_),bag(_),list(_),integer(_),rel(_),pfun(_),pair(_),
-                              nset(_),ninteger(_),nrel(_),npfun(_),npair(_)]).     %all
-%type_constraints_to_be_shown([set(_),integer(_),pfun(_),nset(_),ninteger(_),bag(_),list(_)]).
-%type_constraints_to_be_shown([]).                                         %none
-
 %%% list of options for setlog/5 (to be tried in the order they occur)
 setlog5_opts([clpfd,final,noirules,noneq_elim,noran_elim]).
 
-%%% other aggregates, besides sets (default: off = sets only)
+%%%%%%%%%% dealing with other aggregates (multisets, list constraints)
+
+%%% activate/suppress dealing with other aggregates, besides sets (default: off = sets only)
 %other_aggrs(on).
 other_aggrs(off).
 
-%activate/suppress occur-check (default: on)
+%%%%%%%%%% printing options
+
+%%% type constraints to be printed in the computed answer (default: all)
+%type_constraints_to_be_shown([set(_),bag(_),list(_),integer(_),rel(_),pfun(_),pair(_),
+%                              nset(_),ninteger(_),nrel(_),npfun(_),npair(_)]).     %all
+%type_constraints_to_be_shown([set(_),integer(_),pfun(_),nset(_),ninteger(_),bag(_),list(_)]).
+type_constraints_to_be_shown([nset(_),ninteger(_),nrel(_),npfun(_),npair(_)]).
+%type_constraints_to_be_shown([]).                                         %none    %NEWsint
+
+%%%%%%%%%% general
+
+%%% activate/suppress occur-check (default: on)
 occur_check(on).
 %occur_check(off).
-
-%%% alternative strategies for comp-constraint rewriting (default: std)
-%comp_constraint(std).             % default
-%comp_constraint(sb).              % exploiting the equivalence comp(X,Y,Z) iff compsb(X,Y,Z) & sbcomp(X,Y,Z)
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%% Starting the {log} interpreter %%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%:- setlog(consult_lib,_).
-
-% load the library of filtering rules
+% load the library of filtering rules (if any)
 :- initialization(load_rwrules_lib).
 
+% set the default integer constraint solver (clfd/clpq)  
+:- default_int_solver(Slv),
+   initialization(nb_setval(int_solver,Slv)).  
+
+% load the advanced size solver (if any)    
+:- initialization(load_size_solver).  
+
+% print the initial message for interactive use   
 :- initialization((nl,write('Use ?- setlog_help to get help information about {log}'),nl,nl)).
+
